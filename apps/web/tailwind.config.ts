@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Paleta provisória do Mercearia (azul-petróleo + ciano, cara de ótica). Quando
+ * Paleta da Mercearia Saudável (verde-folha + verde-limão, a mesma da apresentação). Quando
  * a identidade visual sair, troca só aqui: as telas usam os nomes, não as cores.
  */
 export default {
@@ -9,7 +9,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: { DEFAULT: '#0B3B4F', dark: '#072836', soft: '#E6F1F4', accent: '#5CE1E6' },
+        brand: { DEFAULT: '#2F6B3A', dark: '#1F4A27', soft: '#E8F2E4', accent: '#B8E06A' },
         ink: { DEFAULT: '#14232B', soft: '#5B6B73' },
       },
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },

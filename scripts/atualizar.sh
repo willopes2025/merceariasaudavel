@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Atualiza o Mercearia na VPS com um comando só:
+# Atualiza a Mercearia Saudável na VPS com um comando só:
 #
 #   cd /opt/mercearia && ./scripts/atualizar.sh
 #
@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 COMPOSE="docker compose -f docker-compose.prod.yml"
-URL="${Mercearia_URL:-https://programaseven.wideic.com}/v1/health"
+URL="${MERCEARIA_URL:-https://mercearia.wideic.com}/v1/health"
 
 echo "1/5 · Backup do banco"
 ./scripts/backup.sh

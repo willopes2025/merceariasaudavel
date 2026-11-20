@@ -125,3 +125,13 @@ export function addDays(isoDate: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+export function formatMoney(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/** Quantidade com até 3 casas, vírgula decimal (0,35 kg; 2 un). */
+export function formatQty(v: number, unit?: string): string {
+  const n = v.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+  return unit ? `${n} ${unit.toLowerCase()}` : n;
+}

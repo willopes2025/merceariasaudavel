@@ -7,7 +7,7 @@ import { Stat } from './PayablesScreen';
 
 const monthStart = (iso: string) => `${iso.slice(0, 8)}01`;
 
-/** Resumo do período: vendas, recebimentos, vendedores, orçamentos perdidos e despesas. */
+/** Resumo do período: vendas, margem, clube, perdas, recebimentos e despesas. */
 export function ReportScreen() {
   const today = todayBR();
   const [from, setFrom] = useState(monthStart(today));
@@ -26,7 +26,7 @@ export function ReportScreen() {
 
   return (
     <div className="max-w-6xl">
-      <PageHeader title="Resumo do período" subtitle="Vendido = O.S. abertas no período (fora as canceladas). Recebido = o que entrou no caixa e pelo Asaas." />
+      <PageHeader title="Resumo do período" subtitle="Vendido = vendas do caixa (fora as canceladas), contando o cashback usado. Recebido = o que entrou no caixa." />
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <label className="text-sm">
           <span className="mb-1 block text-xs text-ink-soft">De</span>
@@ -64,48 +64,39 @@ export function ReportScreen() {
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-4">
-            <Stat label="Vendido" value={formatMoney(r.orders.total)} />
-            <Stat label="O.S. abertas" value={String(r.orders.count)} />
-            <Stat label="Ticket médio" value={formatMoney(r.orders.averageTicket)} />
+            <Stat label="Vendido" value={formatMoney(r.sales.total)} />
+            <Stat label="Vendas · ticket médio" value={`${r.sales.count} · ${formatMoney(r.sales.averageTicket)}`} />
+            <Stat label="Margem bruta" value={`${r.sales.grossMargin.toLocaleString('pt-BR')}%`} />
             <Stat label="Recebido" value={formatMoney(r.received.total)} />
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
+            <Stat label="Faturamento de membros" value={`${r.sales.memberShare.toLocaleString('pt-BR')}%`} />
+            <Stat label="Economia dada aos membros" value={formatMoney(r.sales.memberSavings)} />
+            <Stat label="Cashback ganho · usado" value={`${formatMoney(r.cashback.earned)} · ${formatMoney(r.cashback.used)}`} />
+            <Stat label="Perdas (a custo)" value={formatMoney(r.losses.total)} alert={r.losses.total > 0} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <Stat label="Despesas pagas" value={formatMoney(r.payables.paid)} />
             <Stat label="Recebido − despesas" value={formatMoney(r.result)} alert={r.result < 0} />
-            <Stat label="Crediário em aberto (hoje)" value={formatMoney(r.receivables.openAmount)} />
-            <Stat label="Crediário em atraso (hoje)" value={formatMoney(r.receivables.overdueAmount)} alert={r.receivables.overdueAmount > 0} />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
+            <Block title="Por categoria (venda · margem)">
+              <Rows rows={r.byCategory.map((c) => [c.name, `${formatMoney(c.total)} · ${c.margin.toLocaleString('pt-BR')}%`])} empty="Nenhuma venda no período." />
+            </Block>
+            <Block title="Por pessoa da equipe">
+              <Rows rows={r.bySeller.map((s) => [`${s.name} · ${s.count} vendas`, formatMoney(s.total)])} empty="Nenhuma venda no período." />
+            </Block>
             <Block title="Recebido por forma">
               <Rows rows={r.received.byMethod.map((m) => [m.name, formatMoney(m.amount)])} empty="Nada recebido no período." />
             </Block>
-            <Block title="Por vendedor(a)">
-              <Rows rows={r.bySeller.map((s) => [`${s.name} · ${s.count} O.S.`, formatMoney(s.total)])} empty="Nenhuma O.S. no período." />
-            </Block>
-            <Block title="Orçamentos">
-              <Rows
-                rows={[
-                  ['Feitos', String(r.quotes.made)],
-                  ['Viraram O.S.', String(r.quotes.approved)],
-                  ['Recusados', String(r.quotes.declined)],
-                  ['Ainda em aberto', String(r.quotes.open)],
-                ]}
-                empty=""
-              />
-              {r.quotes.lostReasons.length > 0 && (
-                <>
-                  <h3 className="mb-1 mt-3 text-xs font-semibold text-ink-soft">Por que não fecharam</h3>
-                  <Rows rows={r.quotes.lostReasons.map((l) => [l.reason, String(l.count)])} empty="" />
-                </>
-              )}
+            <Block title="Perdas por motivo">
+              <Rows rows={r.losses.byReason.map((l) => [l.reason, formatMoney(l.amount)])} empty="Nenhuma perda no período." />
             </Block>
             <Block title="Despesas pagas por categoria">
               <Rows rows={r.payables.byCategory.map((c) => [PAYABLE_CATEGORIES[c.category].split(' (')[0]!, formatMoney(c.amount)])} empty="Nenhuma despesa paga no período." />
             </Block>
           </div>
-          <p className="text-xs text-ink-soft">
-            {r.orders.delivered} O.S. do período já entregues · {r.orders.canceled} canceladas.
-          </p>
+          <p className="text-xs text-ink-soft">{r.sales.canceled} vendas canceladas no período.</p>
         </div>
       )}
     </div>

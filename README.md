@@ -1,39 +1,41 @@
-# VISIO
+# Mercearia Saudável
 
-ERP de ótica + CRM do grupo Seven: a operação de loja que hoje está no ssÓtica
-e o atendimento que hoje está no Widezap, num sistema só. Mesma base técnica
-do Soul ERP (`erp/` na branch do Soul): NestJS + Prisma + PostgreSQL, React +
-Vite + Tailwind, Docker e Caddy na VPS.
+Sistema da loja: caixa (PDV) com preço de membro e cashback, estoque com lote e
+validade, shakes e sorvetes com ficha técnica e controle de perdas, metas,
+painel do dia e TV. Mesma base técnica do Soul ERP e do VISIO: NestJS + Prisma +
+PostgreSQL (com isolamento por RLS), React + Vite + Tailwind, Docker e Caddy na VPS.
 
-Arquitetura completa, fases e decisões: documento "VISIO — Arquitetura do ERP
-de Ótica + CRM".
+Proposta e arquitetura completa: apresentação "Mercearia Saudável · Arquitetura do Sistema".
+
+## O que tem (Fase 1 — loja física)
+
+- **Caixa (PDV)**: leitor de código de barras, balança (granel por kg), cliente por
+  celular/CPF, cadastro de membro na hora, preço de membro, desconto (só gerente),
+  cashback, várias formas de pagamento com troco, NFC-e automática (Focus NFe).
+- **Cancelamento**: estorna pelo caixa aberto, devolve o estoque nos mesmos lotes,
+  desfaz o cashback e cancela a nota antes.
+- **Produtos**: revenda, insumo e preparado; preço e preço de membro; lote e
+  validade com saída FEFO; entrada pelo XML da nota (com o lote do fornecedor).
+- **Shakes e sorvetes**: ficha técnica, baixa dos insumos na venda, contagem do
+  fim do dia, perdas por motivo e margem de cada preparado.
+- **Clube**: membro grátis, cashback com validade e limite de uso, extrato.
+- **Gestão**: painel do dia, metas (loja, pessoa, categoria, produto; faturamento,
+  ticket, itens por venda, novos membros, perda de insumos), resumo do período,
+  tela de TV pública por link.
+- O menu já mostra as abas das Fases 2 e 3 (app, totem, loja online,
+  marketplaces, iFood, WhatsApp com IA, recompra, parceiros, câmeras).
 
 ## Estrutura
 
 ```
-visio/
-├── apps/
-│   ├── api/          NestJS 11 + Prisma 6 (cliente sem motor nativo + driver pg)
-│   │   ├── prisma/   schema, migrações (com RLS por organização) e seed
-│   │   └── src/
-│   │       ├── common/   auth (guard, JWT, permissões), isolamento no banco, erros, auditoria
-│   │       └── modules/  iam (login, usuários, papéis), tenancy (lojas, operações)
-│   └── web/          React 18 + Vite + Tailwind + TanStack Query
-├── packages/
-│   └── contracts/    schemas Zod e permissões, usados pela API e pelo front
-├── scripts/          build-release, backup, teste ponta a ponta
-├── Dockerfile        imagem única: API em /v1, sistema em /
-└── docker-compose.prod.yml
+apps/api        NestJS 11 + Prisma 6 (cliente sem motor nativo + driver pg)
+  prisma/       schema, migrações (com RLS) e seed
+  src/modules/  iam, tenancy, customers, products, sales, cash, kitchen,
+                management (metas, painel, TV), finance, fiscal, notify
+apps/web        React 18 + Vite + Tailwind + TanStack Query
+packages/contracts  schemas Zod e regras compartilhadas (API e telas)
+scripts/        build-release, backup, atualizar, testes ponta a ponta
 ```
-
-## Fase 0 (esta entrega)
-
-- Organização → lojas (Programa Seven, James & Jesse's) → operações (as 6 do grupo, com a loja que recebe o lead).
-- Login com bloqueio após 5 erros, papéis padrão (proprietário, gerente de loja, vendedor, caixa, montador, optometrista) e lojas por pessoa.
-- Permissão checada no servidor em toda rota e relida a cada minuto (tirar acesso vale sem novo login).
-- Isolamento por organização em duas camadas: filtro na aplicação e RLS no PostgreSQL.
-- Menu com os 12 grupos do sistema; o que ainda não existe mostra o que vai ter e em que fase.
-- Auditoria de quem criou/alterou loja, operação e usuário.
 
 ## Rodar no computador
 
@@ -46,9 +48,8 @@ npm test                                     # testes unitários
 npm run e2e                                  # ponta a ponta contra um Postgres local
 ```
 
-Sem acesso ao servidor de binários do Prisma, use `PRISMA_JS_ENGINE=1` (motor
-em WebAssembly) para `prisma generate`.
+Sem acesso ao servidor de binários do Prisma, use `PRISMA_JS_ENGINE=1`.
 
 ## Publicar
 
-Ver [DEPLOY.md](DEPLOY.md).
+Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).

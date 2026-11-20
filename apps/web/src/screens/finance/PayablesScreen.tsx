@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PAYABLE_CATEGORIES, formatMoney, payableSchema, todayBR, type Page, type Payable, type PayableSummary, type Store } from '@mercearia/contracts';
 import { api, can } from '../../lib/api';
 import { Drawer, Empty, ErrorBox, Field, Loading, PageHeader } from '../../components/ui';
-import { formatDay } from '../../components/os';
+import { formatDay } from '../../components/format';
 
 const FILTERS = { open: 'Em aberto', overdue: 'Atrasadas', paid: 'Pagas', canceled: 'Canceladas', all: 'Todas' } as const;
 

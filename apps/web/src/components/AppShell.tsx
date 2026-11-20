@@ -9,17 +9,17 @@ import { Loading } from './ui';
 export function Logo({ light = false }: { light?: boolean }) {
   return (
     <span className={`flex items-center gap-2 text-lg font-bold tracking-wide ${light ? 'text-white' : 'text-brand'}`}>
-      <svg viewBox="0 0 64 64" className="h-7 w-7" aria-hidden>
-        <circle cx="22" cy="34" r="10" fill="none" stroke="#5CE1E6" strokeWidth="5" />
-        <circle cx="42" cy="34" r="10" fill="none" stroke="#5CE1E6" strokeWidth="5" />
+      <svg viewBox="0 0 24 24" className="h-7 w-7" aria-hidden fill="none" stroke="#B8E06A" strokeWidth="1.8">
+        <path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15z" fill="rgba(184,224,106,.2)" />
+        <path d="M5 19l8-8" />
       </svg>
-      Mercearia
+      Mercearia Saudável
     </span>
   );
 }
 
 /**
- * Moldura do sistema: menu lateral com os 12 grupos e o conteúdo ao lado.
+ * Moldura do sistema: menu lateral com as áreas e o conteúdo ao lado.
  * No celular o menu vira gaveta. As permissões são relidas a cada 5 minutos,
  * então tirar um acesso some do menu sem precisar sair e entrar.
  */

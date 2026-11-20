@@ -2,7 +2,7 @@
 #
 # Backup do banco do Mercearia em ./backups (guarda 14 dias).
 # Agendar todo dia às 3h (crontab -e na VPS):
-#   0 3 * * * cd /opt/mercearia-repo/mercearia && ./scripts/backup.sh >> backups/backup.log 2>&1
+#   0 3 * * * cd /opt/mercearia && ./scripts/backup.sh >> backups/backup.log 2>&1
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

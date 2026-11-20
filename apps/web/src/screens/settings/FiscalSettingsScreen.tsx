@@ -78,6 +78,7 @@ function StateBadge({ c }: { c: FiscalConfig }) {
 
 function ConfigDrawer({ config, onClose, onSaved }: { config: FiscalConfig; onClose: () => void; onSaved: (c: FiscalConfig) => void }) {
   const [enabled, setEnabled] = useState(config.enabled);
+  const [autoEmit, setAutoEmit] = useState(config.autoEmit);
   const [environment, setEnvironment] = useState<FiscalEnvironment>(config.environment);
   const [tokenHomologacao, setTokenH] = useState('');
   const [tokenProducao, setTokenP] = useState('');
@@ -105,7 +106,7 @@ function ConfigDrawer({ config, onClose, onSaved }: { config: FiscalConfig; onCl
     setSaved(false);
     setTest(null);
     // Campo de token em branco = não mexe no que está gravado.
-    const parsed = fiscalConfigSchema.safeParse({ enabled, environment, cfop, icmsOrigin, icmsCst, defaultNcm, ...(tokenHomologacao.trim() ? { tokenHomologacao } : {}), ...(tokenProducao.trim() ? { tokenProducao } : {}) });
+    const parsed = fiscalConfigSchema.safeParse({ enabled, autoEmit, environment, cfop, icmsOrigin, icmsCst, defaultNcm, ...(tokenHomologacao.trim() ? { tokenHomologacao } : {}), ...(tokenProducao.trim() ? { tokenProducao } : {}) });
     if (!parsed.success) return setError(new Error(parsed.error.issues[0]?.message));
     setError(null);
     save.mutate(parsed.data);
@@ -118,7 +119,14 @@ function ConfigDrawer({ config, onClose, onSaved }: { config: FiscalConfig; onCl
           <input type="checkbox" className="mt-0.5" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           <span>
             Emitir nota fiscal nesta loja
-            <span className="block text-xs text-ink-soft">Desmarcado, o botão de emitir some das O.S. desta loja.</span>
+            <span className="block text-xs text-ink-soft">Desmarcado, nenhuma venda desta loja gera nota.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-0.5" checked={autoEmit} onChange={(e) => setAutoEmit(e.target.checked)} />
+          <span>
+            Emitir a NFC-e sozinha ao finalizar a venda no caixa
+            <span className="block text-xs text-ink-soft">Desmarcado, a nota é emitida pela tela da venda.</span>
           </span>
         </label>
         <Field label="Ambiente" hint="Comece em homologação: as notas são de teste. Só mude para produção depois de uma nota de teste autorizada.">

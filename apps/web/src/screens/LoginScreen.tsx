@@ -35,7 +35,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
       <form onSubmit={submit} className="card w-full max-w-sm space-y-4 p-8">
         <div className="mb-2">
           <Logo />
-          <p className="mt-2 text-sm text-ink-soft">ERP de ótica + CRM</p>
+          <p className="mt-2 text-sm text-ink-soft">Caixa, estoque, clube e metas da loja</p>
         </div>
         <Field label="E-mail">
           <input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />

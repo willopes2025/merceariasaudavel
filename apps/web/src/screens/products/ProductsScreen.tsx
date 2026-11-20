@@ -1,92 +1,104 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import {
+  LOSS_REASONS,
   PRODUCT_KINDS,
   STOCK_MOVEMENT_TYPES,
-  TRACKS_STOCK_BY_DEFAULT,
-  formatMoney,
+  UNITS,
   productSchema,
+  recipeSchema,
   stockMoveSchema,
   stockStores,
+  type Category,
   type Page,
   type Product,
   type ProductDetail,
-  type ProductKind,
+  type ProductForm,
   type Store,
 } from '@mercearia/contracts';
-import { api, can, session } from '../../lib/api';
+import { api, can } from '../../lib/api';
 import { Drawer, Empty, ErrorBox, Field, Loading, PageHeader } from '../../components/ui';
-import { formatDateTime } from '../../components/os';
-import { ProductImportDrawer } from './ProductImportDrawer';
+import { formatDateTime, formatDay, formatMoney, formatQty } from '../../components/format';
 import { StockEntryDrawer } from './StockEntryDrawer';
 
-type MoveType = 'entrada' | 'saida' | 'ajuste' | 'transferencia';
+const useCategories = () => useQuery({ queryKey: ['categories'], queryFn: () => api<Category[]>('/categories') });
+const useStores = () => useQuery({ queryKey: ['stores'], queryFn: () => api<Store[]>('/stores') });
 
-/** Produtos e posição de estoque por loja. `stockView` abre já no que está em falta. */
+/** Produtos e estoque. `stockView` abre no que está abaixo do mínimo. */
 export function ProductsScreen({ stockView = false }: { stockView?: boolean }) {
   const client = useQueryClient();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [kind, setKind] = useState('');
-  const [stock, setStock] = useState<'all' | 'out'>('all');
+  const [categoryId, setCategoryId] = useState('');
+  const [stock, setStock] = useState<'all' | 'low' | 'out'>(stockView ? 'low' : 'all');
   const [status, setStatus] = useState('active');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
   const [entering, setEntering] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
-  useEffect(() => setPage(1), [debounced, kind, stock, status]);
-  const params = new URLSearchParams({ status, stock, page: String(page), pageSize: '30' });
+  useEffect(() => setPage(1), [debounced, kind, categoryId, stock, status]);
+  const params = new URLSearchParams({ status, stock, page: String(page), pageSize: '50' });
   if (debounced) params.set('q', debounced);
   if (kind) params.set('kind', kind);
+  if (categoryId) params.set('categoryId', categoryId);
   const list = useQuery({ queryKey: ['products', params.toString()], queryFn: () => api<Page<Product>>(`/products?${params}`) });
-  const stores = useQuery({ queryKey: ['stores'], queryFn: () => api<Store[]>('/stores') });
-  const activeStores = stockStores((stores.data ?? []).filter((s) => s.active));
+  const categories = useCategories();
   const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.pageSize)) : 1;
   const refresh = () => {
     client.invalidateQueries({ queryKey: ['products'] });
     client.invalidateQueries({ queryKey: ['product'] });
-    client.invalidateQueries({ queryKey: ['product-lookup'] });
   };
 
   return (
     <div className="max-w-6xl">
       <PageHeader
         title={stockView ? 'Estoque' : 'Produtos'}
-        subtitle={stockView ? 'Posição por loja. Clique no produto para dar entrada, saída, acerto ou transferir.' : 'Armações, lentes, acessórios e serviços. A armação sai do estoque quando a O.S. é aberta.'}
+        subtitle={
+          stockView
+            ? 'O que está abaixo do mínimo. Clique no produto para dar entrada (com lote e validade), lançar perda ou acertar.'
+            : 'Revenda, insumos e preparados (shakes e sorvetes com ficha técnica). Preço de membro vale para quem é do clube.'
+        }
         action={
-          can('stock.adjust') && (
-            <div className="flex gap-2">
+          <div className="flex gap-2">
+            {can('stock.adjust') && (
               <button className="btn-ghost" onClick={() => setEntering(true)}>
                 Entrada por XML
               </button>
-              <button className="btn-ghost" onClick={() => setImporting(true)}>
-                Importar planilha
-              </button>
+            )}
+            {can('product.manage') && (
               <button className="btn-primary" onClick={() => setEditing('new')}>
                 Novo produto
               </button>
-            </div>
-          )
+            )}
+          </div>
         }
       />
       <div className="mb-4 flex flex-wrap gap-2">
-        <input className="input max-w-xs" placeholder="Nome, grife ou código" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar produto" />
+        <input className="input max-w-xs" placeholder="Nome, marca ou código de barras" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar produto" />
         <select className="input w-auto" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Tipo">
           <option value="">Todos os tipos</option>
           {Object.entries(PRODUCT_KINDS).map(([k, v]) => (
             <option key={k} value={k}>
-              {v}
+              {v.split(' (')[0]}
             </option>
           ))}
         </select>
-        <select className="input w-auto" value={stock} onChange={(e) => setStock(e.target.value as 'all' | 'out')} aria-label="Estoque">
+        <select className="input w-auto" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} aria-label="Categoria">
+          <option value="">Todas as categorias</option>
+          {categories.data?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <select className="input w-auto" value={stock} onChange={(e) => setStock(e.target.value as typeof stock)} aria-label="Estoque">
           <option value="all">Qualquer estoque</option>
+          <option value="low">Abaixo do mínimo</option>
           <option value="out">Zerado ou negativo</option>
         </select>
         <select className="input w-auto" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Situação">
@@ -100,7 +112,7 @@ export function ProductsScreen({ stockView = false }: { stockView?: boolean }) {
         {list.isLoading ? (
           <Loading />
         ) : !list.data?.items.length ? (
-          <Empty>{debounced || kind || stock === 'out' ? 'Nenhum produto com esses filtros.' : 'Nenhum produto cadastrado ainda.'}</Empty>
+          <Empty>{debounced || kind || stock !== 'all' ? 'Nenhum produto com esses filtros.' : 'Nenhum produto cadastrado ainda.'}</Empty>
         ) : (
           <table className="table">
             <thead>
@@ -108,244 +120,357 @@ export function ProductsScreen({ stockView = false }: { stockView?: boolean }) {
                 <th>Produto</th>
                 <th>Tipo</th>
                 <th className="text-right">Preço</th>
-                {activeStores.map((s) => (
-                  <th key={s.id} className="text-right">
-                    {s.name}
-                  </th>
-                ))}
+                <th className="text-right">Membro</th>
+                <th className="text-right">Custo</th>
+                <th className="text-right">Estoque</th>
               </tr>
             </thead>
             <tbody>
-              {list.data.items.map((p) => (
-                <tr key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setViewing(p.id)}>
-                  <td>
-                    <span className="font-medium">{p.name}</span>
-                    {!p.active && <span className="badge ml-2 bg-slate-100 text-slate-500">Desativado</span>}
-                    <div className="text-xs text-ink-soft">{[p.brand, p.sku].filter(Boolean).join(' · ')}</div>
-                  </td>
-                  <td>{PRODUCT_KINDS[p.kind]}</td>
-                  <td className="text-right tabular-nums">{formatMoney(p.price)}</td>
-                  {activeStores.map((s) => {
-                    const n = p.stock.find((b) => b.storeId === s.id)?.quantity;
-                    return (
-                      <td key={s.id} className={`text-right tabular-nums ${n !== undefined && n <= 0 ? 'font-medium text-red-600' : ''}`}>
-                        {n === undefined ? '—' : n}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {list.data.items.map((p) => {
+                const cost = p.recipeCost ?? p.cost;
+                return (
+                  <tr key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setViewing(p.id)}>
+                    <td>
+                      <span className="font-medium">{p.name}</span>
+                      {!p.active && <span className="badge ml-2 bg-slate-100 text-slate-500">Desativado</span>}
+                      <div className="text-xs text-ink-soft">{[p.categoryName, p.brand, p.barcode].filter(Boolean).join(' · ')}</div>
+                    </td>
+                    <td>{PRODUCT_KINDS[p.kind].split(' (')[0]}</td>
+                    <td className="text-right tabular-nums">
+                      {formatMoney(p.price)}
+                      {p.unit !== 'UN' && <span className="text-xs text-ink-soft">/{p.unit.toLowerCase()}</span>}
+                    </td>
+                    <td className="text-right tabular-nums text-brand">{p.memberPrice != null ? formatMoney(p.memberPrice) : '—'}</td>
+                    <td className="text-right tabular-nums text-ink-soft">
+                      {formatMoney(cost)}
+                      {p.price > 0 && cost > 0 && <div className="text-xs">margem {Math.round(((p.price - cost) / p.price) * 100)}%</div>}
+                    </td>
+                    <td className={`text-right tabular-nums ${p.trackStock && (p.totalStock <= 0 || p.low) ? 'font-medium text-red-600' : ''}`}>
+                      {p.trackStock ? formatQty(p.totalStock, p.unit === 'UN' ? undefined : p.unit) : p.kind === 'preparado' ? 'pela ficha' : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
       {pages > 1 && (
-        <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-          <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((x) => x - 1)}>
+        <div className="mt-3 flex justify-end gap-2 text-sm">
+          <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
             Anterior
           </button>
-          <span className="text-ink-soft">
-            Página {page} de {pages} · {list.data?.total} produtos
+          <span className="self-center">
+            {page} de {pages}
           </span>
-          <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((x) => x + 1)}>
+          <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>
             Próxima
           </button>
         </div>
       )}
-      {editing && <ProductForm product={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSaved={(p) => { refresh(); setEditing(null); setViewing(p.id); }} />}
-      {entering && <StockEntryDrawer onClose={() => setEntering(false)} onDone={refresh} />}
-      {importing && <ProductImportDrawer onClose={() => setImporting(false)} onImported={refresh} />}
-      {viewing && !editing && <ProductDrawer id={viewing} stores={activeStores} onClose={() => setViewing(null)} onEdit={setEditing} onChanged={refresh} />}
+      {editing && (
+        <ProductFormDrawer
+          product={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={(p) => {
+            refresh();
+            setEditing(null);
+            setViewing(p.id);
+          }}
+        />
+      )}
+      {viewing && <ProductDrawer id={viewing} onClose={() => setViewing(null)} onEdit={(p) => { setViewing(null); setEditing(p); }} onChanged={refresh} />}
+      {entering && <StockEntryDrawer onClose={() => setEntering(false)} onDone={() => { refresh(); setEntering(false); }} />}
     </div>
   );
 }
 
-function ProductForm({ product, onClose, onSaved }: { product?: Product; onClose: () => void; onSaved: (p: Product) => void }) {
-  const [name, setName] = useState(product?.name ?? '');
-  const [kind, setKind] = useState<ProductKind>(product?.kind ?? 'armacao');
-  const [brand, setBrand] = useState(product?.brand ?? '');
-  const [sku, setSku] = useState(product?.sku ?? '');
-  const [price, setPrice] = useState(product ? product.price.toFixed(2).replace('.', ',') : '');
-  const [cost, setCost] = useState(product?.cost ? product.cost.toFixed(2).replace('.', ',') : '');
-  const [ncm, setNcm] = useState(product?.ncm ?? '');
-  const [unit, setUnit] = useState(product?.unit ?? '');
-  const [trackStock, setTrack] = useState(product?.trackStock ?? true);
-  const [active, setActive] = useState(product?.active ?? true);
+const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', active: true };
+
+function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: (p: ProductDetail) => void }) {
+  const categories = useCategories();
+  const [f, setF] = useState<ProductForm>(() =>
+    product
+      ? { ...product, memberPrice: product.memberPrice, price: String(product.price).replace('.', ',') as unknown as number, cost: String(product.cost).replace('.', ',') as unknown as number }
+      : empty,
+  );
   const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
-  async function submit(e: FormEvent) {
+  const set = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) => setF((x) => ({ ...x, [k]: v }));
+  const save = useMutation({
+    mutationFn: (body: unknown) => (product ? api<ProductDetail>(`/products/${product.id}`, { method: 'PUT', json: body }) : api<ProductDetail>('/products', { method: 'POST', json: body })),
+    onSuccess: onSaved,
+    onError: setError,
+  });
+  function submit(e: FormEvent) {
     e.preventDefault();
-    const parsed = productSchema.safeParse({ name, kind, brand: brand || null, sku: sku || null, price, cost, trackStock, active, ncm, unit });
-    if (!parsed.success) return setError(new Error(parsed.error.issues[0]?.message));
-    setBusy(true);
-    try {
-      onSaved(await api<Product>(product ? `/products/${product.id}` : '/products', { method: product ? 'PUT' : 'POST', json: parsed.data }));
-    } catch (err) {
-      setError(err);
-      setBusy(false);
-    }
+    const parsed = productSchema.safeParse(f);
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+    setError(null);
+    save.mutate(parsed.data);
   }
+  const prepared = f.kind === 'preparado';
   return (
-    <Drawer title={product ? 'Editar produto' : 'Novo produto'} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
-        <Field label="Nome">
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="Ex.: RB5154 Clubmaster preto 51" />
+    <Drawer title={product ? 'Editar produto' : 'Novo produto'} onClose={onClose} wide>
+      <form className="grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+        <div className="sm:col-span-2">
+          <Field label="Nome">
+            <input className="input" value={f.name} onChange={(e) => set('name', e.target.value)} autoFocus />
+          </Field>
+        </div>
+        <Field label="Tipo" hint={prepared ? 'Não tem estoque: a venda baixa os insumos da ficha técnica.' : f.kind === 'insumo' ? 'Usado no preparo. Pode ou não ser vendido avulso.' : undefined}>
+          <select className="input" value={f.kind} onChange={(e) => setF((x) => ({ ...x, kind: e.target.value as ProductForm['kind'], sellable: e.target.value !== 'insumo', trackStock: e.target.value !== 'preparado' }))}>
+            {Object.entries(PRODUCT_KINDS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Tipo">
-            <select
-              className="input"
-              value={kind}
-              onChange={(e) => {
-                const k = e.target.value as ProductKind;
-                setKind(k);
-                if (!product) setTrack(TRACKS_STOCK_BY_DEFAULT[k]);
-              }}
-            >
-              {Object.entries(PRODUCT_KINDS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Grife">
-            <input className="input" value={brand} onChange={(e) => setBrand(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Código" hint="Código interno ou de barras. Não pode repetir.">
-          <input className="input" value={sku} onChange={(e) => setSku(e.target.value)} />
+        <Field label="Categoria">
+          <select className="input" value={f.categoryId ?? ''} onChange={(e) => set('categoryId', e.target.value || null)}>
+            <option value="">Sem categoria</option>
+            {categories.data?.filter((c) => c.active).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Preço de venda (R$)">
-            <input className="input tabular-nums" inputMode="decimal" placeholder="0,00" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <Field label="Código de barras (EAN)">
+          <input className="input" value={f.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} placeholder="Passe o leitor aqui" />
+        </Field>
+        <Field label="Código interno">
+          <input className="input" value={f.sku ?? ''} onChange={(e) => set('sku', e.target.value)} />
+        </Field>
+        <Field label="Marca">
+          <input className="input" value={f.brand ?? ''} onChange={(e) => set('brand', e.target.value)} />
+        </Field>
+        <Field label="Unidade">
+          <select className="input" value={f.unit} onChange={(e) => set('unit', e.target.value as ProductForm['unit'])}>
+            {Object.entries(UNITS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {k} · {v}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Preço de venda (R$)">
+          <input className="input" inputMode="decimal" value={String(f.price ?? '')} onChange={(e) => set('price', e.target.value as unknown as number)} />
+        </Field>
+        <Field label="Preço de membro (R$)" hint="Vazio = mesmo preço para todos. É o que faz a cliente entrar no clube.">
+          <input className="input" inputMode="decimal" value={f.memberPrice == null ? '' : String(f.memberPrice).replace('.', ',')} onChange={(e) => set('memberPrice', (e.target.value || null) as unknown as number | null)} />
+        </Field>
+        {!prepared && (
+          <Field label="Custo (R$)" hint="A entrada de mercadoria atualiza com o custo da última compra.">
+            <input className="input" inputMode="decimal" value={String(f.cost ?? '')} onChange={(e) => set('cost', e.target.value as unknown as number)} />
           </Field>
-          <Field label="Custo (R$)">
-            <input className="input tabular-nums" inputMode="decimal" placeholder="0,00" value={cost} onChange={(e) => setCost(e.target.value)} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="NCM" hint="8 números. Vai na nota fiscal.">
-            <input className="input tabular-nums" inputMode="numeric" value={ncm} onChange={(e) => setNcm(e.target.value)} />
-          </Field>
-          <Field label="Unidade" hint="Ex.: UN, PAR">
-            <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} />
-          </Field>
-        </div>
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-0.5" checked={trackStock} onChange={(e) => setTrack(e.target.checked)} />
-          <span>
-            Controla estoque
-            <span className="block text-xs text-ink-soft">Desmarque para lente sob encomenda e serviços.</span>
-          </span>
-        </label>
-        {product && (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Produto ativo
-          </label>
         )}
-        <ErrorBox error={error} />
-        <button className="btn-primary w-full" disabled={busy}>
-          {busy ? 'Salvando…' : 'Salvar'}
-        </button>
+        {!prepared && (
+          <Field label={`Estoque mínimo (${(f.unit ?? 'UN').toLowerCase()})`} hint="Abaixo disso aparece no painel.">
+            <input className="input" inputMode="decimal" value={String(f.minStock ?? '')} onChange={(e) => set('minStock', e.target.value as unknown as number)} />
+          </Field>
+        )}
+        <Field label="NCM (nota fiscal)">
+          <input className="input" inputMode="numeric" value={f.ncm ?? ''} onChange={(e) => set('ncm', e.target.value)} placeholder="8 números" />
+        </Field>
+        <Field label="CEST">
+          <input className="input" inputMode="numeric" value={f.cest ?? ''} onChange={(e) => set('cest', e.target.value)} />
+        </Field>
+        <div className="flex flex-col gap-2 text-sm sm:col-span-2">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={Boolean(f.soldByWeight)} onChange={(e) => setF((x) => ({ ...x, soldByWeight: e.target.checked, unit: e.target.checked ? 'KG' : x.unit }))} />
+            Vendido na balança (granel, por kg)
+          </label>
+          {!prepared && (
+            <>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={Boolean(f.trackStock)} onChange={(e) => set('trackStock', e.target.checked)} />
+                Controla estoque
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={Boolean(f.trackLots)} disabled={!f.trackStock} onChange={(e) => set('trackLots', e.target.checked)} />
+                Controla lote e validade (sai primeiro o que vence primeiro)
+              </label>
+            </>
+          )}
+          {f.kind === 'insumo' && (
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={Boolean(f.sellable)} onChange={(e) => set('sellable', e.target.checked)} />
+              Também é vendido avulso no caixa
+            </label>
+          )}
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={Boolean(f.active)} onChange={(e) => set('active', e.target.checked)} />
+            Ativo
+          </label>
+        </div>
+        <div className="sm:col-span-2">
+          <ErrorBox error={error} />
+          <button className="btn-primary mt-2 w-full" disabled={save.isPending}>
+            Salvar
+          </button>
+        </div>
       </form>
     </Drawer>
   );
 }
 
-function ProductDrawer({ id, stores, onClose, onEdit, onChanged }: { id: string; stores: Store[]; onClose: () => void; onEdit: (p: Product) => void; onChanged: () => void }) {
-  const q = useQuery({ queryKey: ['product', id], queryFn: () => api<ProductDetail>(`/products/${id}`) });
-  const [moving, setMoving] = useState<MoveType | null>(null);
-  const p = q.data;
+type MoveType = 'entrada' | 'perda' | 'ajuste' | 'transferencia';
+
+function ProductDrawer({ id, onClose, onEdit, onChanged }: { id: string; onClose: () => void; onEdit: (p: Product) => void; onChanged: () => void }) {
+  const client = useQueryClient();
+  const product = useQuery({ queryKey: ['product', id], queryFn: () => api<ProductDetail>(`/products/${id}`) });
+  const stores = useStores();
+  const [move, setMove] = useState<MoveType | null>(null);
+  const [recipe, setRecipe] = useState(false);
+  const p = product.data;
+  const refresh = () => {
+    client.invalidateQueries({ queryKey: ['product', id] });
+    onChanged();
+  };
+  const stockStoreList = stockStores((stores.data ?? []).filter((s) => s.active));
   return (
     <Drawer title={p?.name ?? 'Produto'} onClose={onClose} wide>
       {!p ? (
         <Loading />
       ) : (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="text-ink-soft">
-              {PRODUCT_KINDS[p.kind]}
-              {p.brand && ` · ${p.brand}`}
-              {p.sku && ` · ${p.sku}`} · {formatMoney(p.price)}
-              {can('finance.view') && p.cost > 0 && ` · custo ${formatMoney(p.cost)}`}
-            </span>
-            {can('stock.adjust') && (
-              <button className="text-brand" onClick={() => onEdit(p)}>
-                Editar cadastro
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="text-sm">
+              <p>
+                {PRODUCT_KINDS[p.kind]} {p.categoryName && `· ${p.categoryName}`}
+              </p>
+              <p className="text-ink-soft">{[p.barcode && `EAN ${p.barcode}`, p.sku && `cód. ${p.sku}`, p.ncm && `NCM ${p.ncm}`].filter(Boolean).join(' · ') || 'Sem código'}</p>
+              <p className="mt-1">
+                {formatMoney(p.price)} {p.memberPrice != null && <span className="text-brand">· membro {formatMoney(p.memberPrice)}</span>}
+              </p>
+            </div>
+            {can('product.manage') && (
+              <button className="btn-ghost" onClick={() => onEdit(p)}>
+                Editar
               </button>
             )}
           </div>
-          {!p.trackStock ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-ink-soft">Este produto não controla estoque.</p>
-          ) : (
-            <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {p.stock.map((s) => (
-                  <div key={s.storeId} className="rounded-lg bg-slate-50 p-3">
-                    <div className="text-xs text-ink-soft">{s.storeName}</div>
-                    <div className={`text-lg font-semibold tabular-nums ${s.quantity <= 0 ? 'text-red-600' : ''}`}>{s.quantity}</div>
-                  </div>
-                ))}
+
+          {p.kind === 'preparado' ? (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="font-medium">Ficha técnica</h3>
+                {can('product.manage') && (
+                  <button className="text-sm text-brand" onClick={() => setRecipe(true)}>
+                    {p.recipe.length ? 'Editar ficha' : 'Montar ficha'}
+                  </button>
+                )}
               </div>
-              {can('stock.adjust') && !moving && (
-                <div className="flex flex-wrap gap-2">
-                  <button className="btn-primary" onClick={() => setMoving('entrada')}>
-                    Entrada
-                  </button>
-                  <button className="btn-ghost" onClick={() => setMoving('saida')}>
-                    Saída
-                  </button>
-                  <button className="btn-ghost" onClick={() => setMoving('ajuste')}>
-                    Acerto (contagem)
-                  </button>
-                  {stores.length > 1 && (
-                    <button className="btn-ghost" onClick={() => setMoving('transferencia')}>
-                      Transferir
-                    </button>
-                  )}
-                </div>
+              {!p.recipe.length ? (
+                <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Sem ficha técnica o caixa não vende este preparado.</p>
+              ) : (
+                <table className="table">
+                  <tbody>
+                    {p.recipe.map((r) => (
+                      <tr key={r.ingredientId}>
+                        <td>{r.ingredientName}</td>
+                        <td className="text-right tabular-nums">{formatQty(r.quantity, r.unit)}</td>
+                        <td className="text-right tabular-nums text-ink-soft">{formatMoney(r.cost)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td className="font-medium">Custo do preparado</td>
+                      <td />
+                      <td className="text-right font-medium tabular-nums">
+                        {formatMoney(p.recipeCost ?? 0)}
+                        {p.price > 0 && <div className="text-xs font-normal text-ink-soft">margem {Math.round(((p.price - (p.recipeCost ?? 0)) / p.price) * 100)}%{p.memberPrice ? ` · membro ${Math.round(((p.memberPrice - (p.recipeCost ?? 0)) / p.memberPrice) * 100)}%` : ''}</div>}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               )}
-              {moving && <MoveForm product={p} type={moving} stores={stores} onCancel={() => setMoving(null)} onDone={() => { setMoving(null); q.refetch(); onChanged(); }} />}
-              <div>
-                <h3 className="mb-2 text-sm font-semibold">Movimentações</h3>
-                {!p.movements.length ? (
-                  <p className="text-sm text-ink-soft">Nenhuma movimentação ainda.</p>
-                ) : (
-                  <table className="table tabular-nums">
+            </section>
+          ) : (
+            p.trackStock && (
+              <section>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-medium">Estoque: {formatQty(p.totalStock, p.unit)}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {can('stock.adjust') && (
+                      <button className="btn-ghost px-3 py-1" onClick={() => setMove('entrada')}>
+                        Entrada
+                      </button>
+                    )}
+                    {can('stock.loss') && (
+                      <button className="btn-ghost px-3 py-1" onClick={() => setMove('perda')}>
+                        Perda
+                      </button>
+                    )}
+                    {can('stock.adjust') && (
+                      <button className="btn-ghost px-3 py-1" onClick={() => setMove('ajuste')}>
+                        Acerto
+                      </button>
+                    )}
+                    {can('stock.adjust') && stockStoreList.length > 1 && (
+                      <button className="btn-ghost px-3 py-1" onClick={() => setMove('transferencia')}>
+                        Transferir
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {p.lots.length > 0 && (
+                  <table className="table">
                     <thead>
                       <tr>
-                        <th>Quando</th>
-                        <th>O quê</th>
-                        <th>Loja</th>
+                        <th>Lote</th>
+                        <th>Validade</th>
                         <th className="text-right">Qtd.</th>
-                        <th className="text-right">Saldo</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {p.movements.map((m) => (
-                        <tr key={m.id}>
-                          <td>{formatDateTime(m.at)}</td>
-                          <td>
-                            {m.orderId ? (
-                              <Link className="text-brand" to={`/os/${m.orderId}`}>
-                                {STOCK_MOVEMENT_TYPES[m.type]} {m.orderNumber}
-                              </Link>
-                            ) : (
-                              STOCK_MOVEMENT_TYPES[m.type]
-                            )}
-                            <div className="text-xs text-ink-soft">{[!m.orderId && m.note, m.userName].filter(Boolean).join(' · ')}</div>
+                      {p.lots.map((l) => (
+                        <tr key={l.id}>
+                          <td>{l.code}</td>
+                          <td className={l.daysLeft != null && l.daysLeft <= 15 ? 'font-medium text-red-600' : ''}>
+                            {formatDay(l.expiresAt)} {l.daysLeft != null && <span className="text-xs">({l.daysLeft < 0 ? 'vencido' : `${l.daysLeft} dias`})</span>}
                           </td>
-                          <td>{m.storeName}</td>
-                          <td className={`text-right ${m.delta < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{m.delta > 0 ? `+${m.delta}` : m.delta}</td>
-                          <td className="text-right">{m.balanceAfter}</td>
+                          <td className="text-right tabular-nums">{formatQty(l.quantity)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 )}
-              </div>
-            </>
+              </section>
+            )
+          )}
+
+          {p.usedIn.length > 0 && (
+            <p className="text-sm text-ink-soft">
+              Entra na ficha de: {p.usedIn.map((u) => `${u.name} (${formatQty(u.quantity, p.unit)})`).join(', ')}
+            </p>
+          )}
+
+          {move && <MoveForm product={p} type={move} stores={stockStoreList} onClose={() => setMove(null)} onDone={() => { setMove(null); refresh(); }} />}
+          {recipe && <RecipeForm product={p} onClose={() => setRecipe(false)} onDone={() => { setRecipe(false); refresh(); }} />}
+
+          {p.movements.length > 0 && (
+            <section>
+              <h3 className="mb-2 font-medium">Movimentações</h3>
+              <table className="table">
+                <tbody>
+                  {p.movements.map((m) => (
+                    <tr key={m.id}>
+                      <td className="whitespace-nowrap text-xs text-ink-soft">{formatDateTime(m.at)}</td>
+                      <td>
+                        {STOCK_MOVEMENT_TYPES[m.type]}
+                        {m.reason && ` · ${LOSS_REASONS[m.reason]}`}
+                        {m.saleNumber && ` · venda ${m.saleNumber}`}
+                        {m.lotCode && <span className="text-xs text-ink-soft"> · lote {m.lotCode}</span>}
+                        {m.note && <div className="text-xs text-ink-soft">{m.note}</div>}
+                      </td>
+                      <td className={`text-right tabular-nums ${m.delta < 0 ? 'text-red-600' : 'text-brand'}`}>{m.delta > 0 ? `+${formatQty(m.delta)}` : formatQty(m.delta)}</td>
+                      <td className="text-right tabular-nums text-ink-soft">{formatQty(m.balanceAfter)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           )}
         </div>
       )}
@@ -353,64 +478,162 @@ function ProductDrawer({ id, stores, onClose, onEdit, onChanged }: { id: string;
   );
 }
 
-const MOVE_TITLES: Record<MoveType, string> = { entrada: 'Entrada de estoque', saida: 'Saída de estoque', ajuste: 'Acerto por contagem', transferencia: 'Transferir entre lojas' };
-
-function MoveForm({ product, type, stores, onCancel, onDone }: { product: ProductDetail; type: MoveType; stores: Store[]; onCancel: () => void; onDone: () => void }) {
-  const user = session.user();
-  const allowed = stores;
-  const [storeId, setStoreId] = useState(allowed[0]?.id ?? '');
-  const [toStoreId, setTo] = useState(stores.find((s) => s.id !== allowed[0]?.id)?.id ?? '');
+function MoveForm({ product, type, stores, onClose, onDone }: { product: ProductDetail; type: MoveType; stores: Store[]; onClose: () => void; onDone: () => void }) {
+  const [storeId, setStoreId] = useState(stores[0]?.id ?? '');
+  const [toStoreId, setToStoreId] = useState(stores[1]?.id ?? '');
   const [quantity, setQuantity] = useState('');
+  const [lotCode, setLotCode] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [unitCost, setUnitCost] = useState('');
+  const [reason, setReason] = useState('');
+  const [lotId, setLotId] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<unknown>(null);
-  const save = useMutation({ mutationFn: (data: unknown) => api(`/products/${product.id}/stock`, { method: 'POST', json: data }), onSuccess: onDone, onError: setError });
-  const here = product.stock.find((s) => s.storeId === storeId)?.quantity ?? 0;
+  const save = useMutation({ mutationFn: (body: unknown) => api(`/products/${product.id}/stock`, { method: 'POST', json: body }), onSuccess: onDone, onError: setError });
+  const title = { entrada: 'Entrada de mercadoria', perda: 'Lançar perda', ajuste: 'Acerto (quanto tem na prateleira)', transferencia: 'Transferir entre lojas' }[type];
   function submit(e: FormEvent) {
     e.preventDefault();
-    const parsed = stockMoveSchema.safeParse({ type, storeId, toStoreId, quantity, note: note || (type === 'saida' ? '' : null) });
-    if (!parsed.success) return setError(new Error(parsed.error.issues[0]?.message));
+    const body = { type, storeId, toStoreId, quantity, lotCode: lotCode || null, expiresAt: expiresAt || null, unitCost: unitCost || undefined, reason: reason || undefined, lotId: lotId || null, note: note || null };
+    const parsed = stockMoveSchema.safeParse(body);
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message);
     save.mutate(parsed.data);
   }
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border border-slate-200 p-4">
-      <h3 className="text-sm font-semibold">{MOVE_TITLES[type]}</h3>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={type === 'transferencia' ? 'Da loja' : 'Loja'}>
+    <form className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4" onSubmit={submit}>
+      <p className="font-medium">{title}</p>
+      {stores.length > 1 && (
+        <Field label="Loja">
           <select className="input" value={storeId} onChange={(e) => setStoreId(e.target.value)}>
-            {allowed.map((s) => (
+            {stores.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </select>
         </Field>
-        {type === 'transferencia' && (
-          <Field label="Para a loja">
-            <select className="input" value={toStoreId} onChange={(e) => setTo(e.target.value)}>
-              {stores.filter((s) => s.id !== storeId).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+      )}
+      {type === 'transferencia' && (
+        <Field label="Para a loja">
+          <select className="input" value={toStoreId} onChange={(e) => setToStoreId(e.target.value)}>
+            {stores.filter((s) => s.id !== storeId).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label={`Quantidade (${product.unit.toLowerCase()})`}>
+        <input className="input" inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} autoFocus />
+      </Field>
+      {type === 'entrada' && (
+        <>
+          {product.trackLots && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Lote">
+                <input className="input" value={lotCode} onChange={(e) => setLotCode(e.target.value)} />
+              </Field>
+              <Field label="Validade">
+                <input type="date" className="input" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              </Field>
+            </div>
+          )}
+          <Field label="Custo unitário desta compra (R$)" hint="Opcional. Atualiza o custo do produto.">
+            <input className="input" inputMode="decimal" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+          </Field>
+        </>
+      )}
+      {type === 'perda' && (
+        <>
+          <Field label="Motivo">
+            <select className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
+              <option value="">Escolha…</option>
+              {Object.entries(LOSS_REASONS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
                 </option>
               ))}
             </select>
           </Field>
-        )}
-        <Field label={type === 'ajuste' ? 'Quantos tem de verdade na prateleira' : 'Quantidade'} hint={`O sistema está com ${here} nesta loja.`}>
-          <input className="input tabular-nums" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ''))} autoFocus />
-        </Field>
-      </div>
-      <Field label={type === 'saida' ? 'Motivo' : 'Observação (opcional)'}>
-        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={type === 'entrada' ? 'Ex.: NF 1234 do fornecedor' : type === 'saida' ? 'Ex.: peça com defeito' : ''} />
+          {product.lots.length > 0 && (
+            <Field label="Lote">
+              <select className="input" value={lotId} onChange={(e) => setLotId(e.target.value)}>
+                <option value="">O que vence primeiro</option>
+                {product.lots.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.code} · vence {formatDay(l.expiresAt)} · {formatQty(l.quantity)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+        </>
+      )}
+      <Field label="Observação">
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
       <ErrorBox error={error} />
       <div className="flex justify-end gap-2">
-        <button type="button" className="btn-ghost" onClick={onCancel}>
+        <button type="button" className="btn-ghost" onClick={onClose}>
           Cancelar
         </button>
-        <button className="btn-primary" disabled={save.isPending || quantity === ''}>
-          Confirmar
+        <button className="btn-primary" disabled={save.isPending}>
+          Lançar
         </button>
       </div>
     </form>
+  );
+}
+
+function RecipeForm({ product, onClose, onDone }: { product: ProductDetail; onClose: () => void; onDone: () => void }) {
+  const [items, setItems] = useState(product.recipe.map((r) => ({ ingredientId: r.ingredientId, name: r.ingredientName, unit: r.unit, quantity: String(r.quantity).replace('.', ',') })));
+  const [q, setQ] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const found = useQuery({
+    queryKey: ['recipe-search', q],
+    queryFn: () => api<Page<Product>>(`/products?q=${encodeURIComponent(q)}&pageSize=10`),
+    enabled: q.trim().length >= 2,
+  });
+  const save = useMutation({ mutationFn: (body: unknown) => api(`/products/${product.id}/recipe`, { method: 'PUT', json: body }), onSuccess: onDone, onError: setError });
+  return (
+    <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p className="font-medium">Ficha técnica de 1 {product.name}</p>
+      <p className="text-xs text-ink-soft">Quantidade na unidade do insumo: 30 g de whey controlado em KG = 0,030; 250 ml de leite em L = 0,25.</p>
+      {items.map((i, n) => (
+        <div key={i.ingredientId} className="flex items-center gap-2">
+          <span className="flex-1 text-sm">{i.name}</span>
+          <input className="input w-28 text-right" inputMode="decimal" value={i.quantity} onChange={(e) => setItems((xs) => xs.map((x, k) => (k === n ? { ...x, quantity: e.target.value } : x)))} />
+          <span className="w-8 text-xs text-ink-soft">{i.unit.toLowerCase()}</span>
+          <button className="text-xs text-red-600" onClick={() => setItems((xs) => xs.filter((_, k) => k !== n))}>
+            Tirar
+          </button>
+        </div>
+      ))}
+      <input className="input" placeholder="Buscar insumo para acrescentar" value={q} onChange={(e) => setQ(e.target.value)} />
+      {found.data?.items
+        .filter((p) => p.kind !== 'preparado' && !items.some((i) => i.ingredientId === p.id))
+        .map((p) => (
+          <button key={p.id} className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-white" onClick={() => { setItems((xs) => [...xs, { ingredientId: p.id, name: p.name, unit: p.unit, quantity: '' }]); setQ(''); }}>
+            + {p.name} <span className="text-xs text-ink-soft">({p.unit.toLowerCase()} · custo {formatMoney(p.cost)})</span>
+          </button>
+        ))}
+      <ErrorBox error={error} />
+      <div className="flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose}>
+          Cancelar
+        </button>
+        <button
+          className="btn-primary"
+          disabled={save.isPending}
+          onClick={() => {
+            const parsed = recipeSchema.safeParse({ items: items.map((i) => ({ ingredientId: i.ingredientId, quantity: i.quantity })) });
+            if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+            save.mutate(parsed.data);
+          }}
+        >
+          Salvar ficha
+        </button>
+      </div>
+    </div>
   );
 }

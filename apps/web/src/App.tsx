@@ -5,7 +5,6 @@ import { ApiError, session, whenSessionExpires } from './lib/api';
 import { upcomingItems } from './lib/nav';
 import { AppShell } from './components/AppShell';
 import { LoginScreen } from './screens/LoginScreen';
-import { HomeScreen } from './screens/HomeScreen';
 import { ComingSoonScreen } from './screens/ComingSoonScreen';
 
 /**
@@ -31,36 +30,27 @@ function screen<M, C extends ComponentType<any>>(load: () => Promise<M>, pick: (
 }
 
 const StoresScreen = screen(() => import('./screens/settings/StoresScreen'), (m) => m.StoresScreen);
-const FiscalSettingsScreen = screen(() => import('./screens/settings/FiscalSettingsScreen'), (m) => m.FiscalSettingsScreen);
-const FiscalScreen = screen(() => import('./screens/fiscal/FiscalScreen'), (m) => m.FiscalScreen);
-const OperationsScreen = screen(() => import('./screens/settings/OperationsScreen'), (m) => m.OperationsScreen);
 const UsersScreen = screen(() => import('./screens/settings/UsersScreen'), (m) => m.UsersScreen);
-const OriginsScreen = screen(() => import('./screens/settings/LookupScreens'), (m) => m.OriginsScreen);
-const InsurancePlansScreen = screen(() => import('./screens/settings/LookupScreens'), (m) => m.InsurancePlansScreen);
-const DoctorsScreen = screen(() => import('./screens/settings/LookupScreens'), (m) => m.DoctorsScreen);
-const CustomersScreen = screen(() => import('./screens/customers/CustomersScreen'), (m) => m.CustomersScreen);
-const CustomerScreen = screen(() => import('./screens/customers/CustomerScreen'), (m) => m.CustomerScreen);
-const EventsScreen = screen(() => import('./screens/seven/EventsScreen'), (m) => m.EventsScreen);
-const EventScreen = screen(() => import('./screens/seven/EventScreen'), (m) => m.EventScreen);
-const DayPanelIndex = screen(() => import('./screens/seven/DayPanelIndex'), (m) => m.DayPanelIndex);
-const InstitutionsScreen = screen(() => import('./screens/seven/InstitutionsScreen'), (m) => m.InstitutionsScreen);
-const PublicEventPage = screen(() => import('./screens/seven/PublicEventPage'), (m) => m.PublicEventPage);
-const ImportScreen = screen(() => import('./screens/settings/ImportScreen'), (m) => m.ImportScreen);
-const ServiceOrdersScreen = screen(() => import('./screens/os/ServiceOrdersScreen'), (m) => m.ServiceOrdersScreen);
-const ServiceOrderScreen = screen(() => import('./screens/os/ServiceOrderScreen'), (m) => m.ServiceOrderScreen);
-const ServiceOrderFormScreen = screen(() => import('./screens/os/ServiceOrderFormScreen'), (m) => m.ServiceOrderFormScreen);
-const BoardScreen = screen(() => import('./screens/os/BoardScreen'), (m) => m.BoardScreen);
-const PrescriptionsScreen = screen(() => import('./screens/customers/PrescriptionsScreen'), (m) => m.PrescriptionsScreen);
+const FiscalSettingsScreen = screen(() => import('./screens/settings/FiscalSettingsScreen'), (m) => m.FiscalSettingsScreen);
+const ClubScreen = screen(() => import('./screens/settings/ClubScreens'), (m) => m.ClubScreen);
+const CategoriesScreen = screen(() => import('./screens/settings/ClubScreens'), (m) => m.CategoriesScreen);
+const FiscalScreen = screen(() => import('./screens/fiscal/FiscalScreen'), (m) => m.FiscalScreen);
+const DashboardScreen = screen(() => import('./screens/management/ManagementScreens'), (m) => m.DashboardScreen);
+const GoalsScreen = screen(() => import('./screens/management/ManagementScreens'), (m) => m.GoalsScreen);
+const TvScreensScreen = screen(() => import('./screens/management/ManagementScreens'), (m) => m.TvScreensScreen);
+const TvPage = screen(() => import('./screens/management/TvPage'), (m) => m.TvPage);
+const PdvScreen = screen(() => import('./screens/pdv/PdvScreen'), (m) => m.PdvScreen);
+const SalesScreen = screen(() => import('./screens/sales/SalesScreen'), (m) => m.SalesScreen);
+const SaleScreen = screen(() => import('./screens/sales/SalesScreen'), (m) => m.SaleScreen);
 const CashScreen = screen(() => import('./screens/cash/CashScreen'), (m) => m.CashScreen);
-const ReceivablesScreen = screen(() => import('./screens/finance/ReceivablesScreen'), (m) => m.ReceivablesScreen);
 const ProductsScreen = screen(() => import('./screens/products/ProductsScreen'), (m) => m.ProductsScreen);
+const ExpiringScreen = screen(() => import('./screens/kitchen/KitchenScreens'), (m) => m.ExpiringScreen);
+const CountScreen = screen(() => import('./screens/kitchen/KitchenScreens'), (m) => m.CountScreen);
+const LossesScreen = screen(() => import('./screens/kitchen/KitchenScreens'), (m) => m.LossesScreen);
+const CustomersScreen = screen(() => import('./screens/customers/CustomersScreens'), (m) => m.CustomersScreen);
+const CustomerScreen = screen(() => import('./screens/customers/CustomersScreens'), (m) => m.CustomerScreen);
 const PayablesScreen = screen(() => import('./screens/finance/PayablesScreen'), (m) => m.PayablesScreen);
 const ReportScreen = screen(() => import('./screens/finance/ReportScreen'), (m) => m.ReportScreen);
-const QuotesScreen = screen(() => import('./screens/quotes/QuotesScreen'), (m) => m.QuotesScreen);
-const QuoteScreen = screen(() => import('./screens/quotes/QuoteScreen'), (m) => m.QuoteScreen);
-const QuoteFormScreen = screen(() => import('./screens/quotes/QuoteFormScreen'), (m) => m.QuoteFormScreen);
-const OsStagesScreen = screen(() => import('./screens/settings/OsStagesScreen'), (m) => m.OsStagesScreen);
-const CustomerFormScreen = screen(() => import('./screens/customers/CustomerFormScreen'), (m) => m.CustomerFormScreen);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,12 +73,12 @@ export function App() {
     setSignedIn(false);
   };
 
-  // Página pública de inscrição do Programa Seven: abre sem login.
-  const publicSlug = window.location.pathname.match(/^\/acao\/([a-z0-9-]+)\/?$/)?.[1];
-  if (publicSlug) {
+  // Tela da TV: abre sem login, só com o token do link.
+  const tvToken = window.location.pathname.match(/^\/tv\/([\w-]+)\/?$/)?.[1];
+  if (tvToken) {
     return (
       <Suspense fallback={null}>
-        <PublicEventPage slug={publicSlug} />
+        <TvPage token={tvToken} />
       </Suspense>
     );
   }
@@ -100,44 +90,28 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<AppShell onSignOut={signOut} />}>
-            <Route index element={<HomeScreen />} />
-            <Route path="configuracoes/lojas" element={<StoresScreen />} />
-            <Route path="configuracoes/operacoes" element={<OperationsScreen />} />
-            <Route path="configuracoes/usuarios" element={<UsersScreen />} />
-            <Route path="configuracoes/origens" element={<OriginsScreen />} />
-            <Route path="configuracoes/convenios" element={<InsurancePlansScreen />} />
-            <Route path="configuracoes/medicos" element={<DoctorsScreen />} />
-            <Route path="configuracoes/importar" element={<ImportScreen />} />
-            <Route path="configuracoes/etapas-os" element={<OsStagesScreen />} />
-            <Route path="configuracoes/fiscal" element={<FiscalSettingsScreen />} />
-            <Route path="fiscal" element={<FiscalScreen />} />
+            <Route index element={<DashboardScreen />} />
+            <Route path="metas" element={<GoalsScreen />} />
+            <Route path="resumo" element={<ReportScreen />} />
+            <Route path="vender" element={<PdvScreen />} />
+            <Route path="vendas" element={<SalesScreen />} />
+            <Route path="vendas/:id" element={<SaleScreen />} />
             <Route path="caixa" element={<CashScreen />} />
-            <Route path="receber" element={<ReceivablesScreen />} />
-            <Route path="cobranca" element={<ReceivablesScreen key="cobranca" initial="overdue" />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
-            <Route path="pagar" element={<PayablesScreen />} />
-            <Route path="fluxo" element={<ReportScreen />} />
-            <Route path="receitas" element={<PrescriptionsScreen />} />
-            <Route path="orcamentos" element={<QuotesScreen />} />
-            <Route path="orcamentos/novo" element={<QuoteFormScreen />} />
-            <Route path="orcamentos/:id" element={<QuoteScreen />} />
-            <Route path="orcamentos/:id/editar" element={<QuoteFormScreen key="editar" />} />
-            <Route path="os" element={<ServiceOrdersScreen />} />
-            <Route path="os/consertos" element={<ServiceOrdersScreen key="consertos" kind="conserto" />} />
-            <Route path="os/etapas" element={<BoardScreen />} />
-            <Route path="os/nova" element={<ServiceOrderFormScreen />} />
-            <Route path="os/:id" element={<ServiceOrderScreen />} />
-            <Route path="os/:id/editar" element={<ServiceOrderFormScreen key="editar" />} />
-            <Route path="seven/eventos" element={<EventsScreen />} />
-            <Route path="seven/eventos/:id" element={<EventScreen />} />
-            <Route path="seven/eventos/:id/painel" element={<EventScreen key="painel" initialTab="painel" />} />
-            <Route path="seven/painel-do-dia" element={<DayPanelIndex />} />
-            <Route path="seven/instituicoes" element={<InstitutionsScreen />} />
+            <Route path="validades" element={<ExpiringScreen />} />
+            <Route path="insumos/contagem" element={<CountScreen />} />
+            <Route path="insumos/perdas" element={<LossesScreen />} />
             <Route path="clientes" element={<CustomersScreen />} />
-            <Route path="clientes/novo" element={<CustomerFormScreen />} />
             <Route path="clientes/:id" element={<CustomerScreen />} />
-            <Route path="clientes/:id/editar" element={<CustomerFormScreen key="editar" />} />
+            <Route path="pagar" element={<PayablesScreen />} />
+            <Route path="fiscal" element={<FiscalScreen />} />
+            <Route path="configuracoes/lojas" element={<StoresScreen />} />
+            <Route path="configuracoes/usuarios" element={<UsersScreen />} />
+            <Route path="configuracoes/clube" element={<ClubScreen />} />
+            <Route path="configuracoes/categorias" element={<CategoriesScreen />} />
+            <Route path="configuracoes/tv" element={<TvScreensScreen />} />
+            <Route path="configuracoes/fiscal" element={<FiscalSettingsScreen />} />
             {upcomingItems().map((item) => (
               <Route key={item.path} path={item.path.slice(1)} element={<ComingSoonScreen item={item} />} />
             ))}

@@ -16,7 +16,7 @@ export function UsersScreen() {
     <div className="max-w-5xl">
       <PageHeader
         title="Usuários"
-        subtitle="Quem acessa o Mercearia, com que papel e em quais lojas."
+        subtitle="Quem acessa o sistema, com que papel e em quais lojas."
         action={<button className="btn-primary" onClick={() => setEditing('new')}>Novo usuário</button>}
       />
       <div className="card overflow-x-auto">

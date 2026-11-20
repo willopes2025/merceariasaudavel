@@ -6,7 +6,7 @@ export function ComingSoonScreen({ item }: { item: NavItem }) {
     <div className="max-w-xl">
       <h1 className="text-xl font-semibold">{item.label}</h1>
       <div className="card mt-6 p-6">
-        <span className="badge bg-brand-soft text-brand">Entra na Fase {item.phase}</span>
+        <span className="badge bg-brand-soft text-brand">Entra na Fase {item.phase}{item.phase === 2 ? " · omnichannel" : " · inteligência"}</span>
         <p className="mt-3 text-sm text-ink">{item.description}</p>
       </div>
     </div>

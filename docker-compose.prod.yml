@@ -1,11 +1,11 @@
-# Publicação do Mercearia em programaseven.wideic.com, na VPS que já roda o Soul ERP.
+# Publicação da Mercearia Saudável em mercearia.wideic.com, na VPS que já roda o Soul ERP, o VISIO e a Aritana.
 #
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
 # Este arquivo NÃO tem proxy próprio: as portas 80/443 da VPS são do Caddy do
 # Soul ERP. O contêiner `mercearia-app` entra na rede do Soul e o Caddy de lá
-# encaminha programaseven.wideic.com para ele (ver DEPLOY.md, passo 6).
-# O banco do Mercearia é separado do banco do Soul e só existe na rede interna.
+# encaminha mercearia.wideic.com para ele (ver DEPLOY.md, passo 6).
+# O banco da Mercearia é separado dos outros sistemas e só existe na rede interna.
 
 services:
   mercearia-db:
@@ -39,15 +39,8 @@ services:
       # Isolamento por organização no banco (RLS). Para voltar atrás sem deploy: DB_ISOLATION=off no .env.
       DB_ISOLATION: ${DB_ISOLATION:-on}
       DB_POOL_MAX: ${DB_POOL_MAX:-10}
-      APP_VERSION: ${APP_VERSION:-fase-5b}
-      # API Consultiva do ssÓtica (carga de clientes). Token em Cadastro › Usuários no ssÓtica.
-      SSOTICA_TOKEN: ${SSOTICA_TOKEN:-}
-      SSOTICA_CNPJ: ${SSOTICA_CNPJ:-}
-      SSOTICA_EMPRESA: ${SSOTICA_EMPRESA:-}
+      APP_VERSION: ${APP_VERSION:-fase-1}
       WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
-      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
-      ASAAS_ENV: ${ASAAS_ENV:-sandbox}
-      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
       PORT: 3000
     expose:
       - "3000"

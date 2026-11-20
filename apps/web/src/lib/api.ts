@@ -97,5 +97,5 @@ function friendlyMessage(error: ApiErrorBody['error'] | undefined): string {
 
 /** Recursos opcionais do servidor (ex.: WhatsApp conectado). Padrão: tudo desligado. */
 export function fetchFeatures(): Promise<import('@mercearia/contracts').Features> {
-  return api<import('@mercearia/contracts').Features>('/health/features').catch(() => ({ whatsapp: false, asaas: false }));
+  return api<import('@mercearia/contracts').Features>('/health/features').catch(() => ({ whatsapp: false }));
 }

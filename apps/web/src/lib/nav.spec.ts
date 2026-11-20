@@ -1,29 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { NAV, activePath, visibleNav } from './nav';
 
-describe('menu do Mercearia', () => {
-  it('tem os 12 grupos do documento de arquitetura', () => {
-    expect(NAV).toHaveLength(12);
+describe('menu da Mercearia', () => {
+  it('tem as áreas da proposta', () => {
+    expect(NAV.map((g) => g.label)).toEqual(['Gestão', 'Vender', 'Operar', 'Crescer', 'Financeiro e fiscal', 'Configurações']);
   });
 
-  it('esconde o que a pessoa não pode ver e some com grupo vazio', () => {
-    const montador = new Set(['service_order.view', 'service_order.stage', 'stock.view']);
-    const groups = visibleNav((p) => !p || montador.has(p));
-    const labels = groups.map((g) => g.label);
-    expect(labels).toContain('Ordens de Serviço');
-    expect(labels).not.toContain('Configurações');
-    expect(labels).not.toContain('Fiscal');
-  });
-
-  it('proprietário vê tudo', () => {
-    expect(visibleNav(() => true)).toHaveLength(12);
+  it('a equipe do preparo vê estoque e contagem, mas não o caixa nem configurações', () => {
+    const preparo = new Set(['stock.view', 'stock.loss']);
+    const items = visibleNav((p) => !p || preparo.has(p)).flatMap((g) => g.items.map((i) => i.path));
+    expect(items).toContain('/insumos/contagem');
+    expect(items).not.toContain('/vender');
+    expect(items).not.toContain('/configuracoes/lojas');
   });
 
   it('acende o item mais específico', () => {
-    expect(activePath('/os/etapas')).toBe('/os/etapas');
-    expect(activePath('/os/123')).toBe('/os');
+    expect(activePath('/insumos/contagem')).toBe('/insumos/contagem');
+    expect(activePath('/vendas/123')).toBe('/vendas');
     expect(activePath('/')).toBe('/');
-    expect(activePath('/configuracoes/lojas')).toBe('/configuracoes/lojas');
   });
 
   it('não repete caminho', () => {

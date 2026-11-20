@@ -293,7 +293,8 @@ export interface Category {
 }
 
 /** Lotes vencendo (ou vencidos) — vira alerta no painel e sugestão de promoção. */
-export interface ExpiringLot extends StockLot {
+export interface ExpiringLot extends Omit<StockLot, "daysLeft"> {
+  daysLeft: number;
   productId: string;
   productName: string;
   unit: Unit;

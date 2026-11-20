@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { PRODUCT_KINDS, formatMoney, stockEntrySchema, stockStores, type ProductKind, type ProductOption, type StockEntryItem, type StockEntryPreview, type StockEntryResult, type Store } from '@mercearia/contracts';
 import { api } from '../../lib/api';
 import { Drawer, ErrorBox, Field } from '../../components/ui';
-import { formatDay } from '../../components/os';
+import { formatDay } from '../../components/format';
 
 type Choice = { action: 'skip' } | { action: 'link'; productId: string; productName: string } | { action: 'create'; name: string; kind: ProductKind; price: string };
 
@@ -223,7 +223,7 @@ function ProductSearch({ onPick }: { onPick: (p: ProductOption) => void }) {
           {found.data.map((p) => (
             <button key={p.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50" onClick={() => onPick(p)}>
               {p.name}
-              <span className="ml-2 text-xs text-ink-soft">{[p.brand, p.sku].filter(Boolean).join(' · ')}</span>
+              <span className="ml-2 text-xs text-ink-soft">{[p.categoryName, p.barcode ?? p.sku].filter(Boolean).join(' · ')}</span>
             </button>
           ))}
         </div>

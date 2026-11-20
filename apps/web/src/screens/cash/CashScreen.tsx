@@ -7,7 +7,6 @@ import {
   cashManualSchema,
   cashOpenSchema,
   formatMoney,
-  type CashMovement,
   type CashSession,
   type CashSessionRow,
   type Page,
@@ -15,9 +14,9 @@ import {
 } from '@mercearia/contracts';
 import { api, can, session as auth } from '../../lib/api';
 import { Drawer, Empty, ErrorBox, Field, Loading, PageHeader } from '../../components/ui';
-import { formatDateTime } from '../../components/os';
+import { formatDateTime } from '../../components/format';
 
-/** Caixa da loja: abrir, ver o que entrou, suprimento, sangria, estorno e fechar. */
+/** Caixa da loja: abrir, ver o que entrou, suprimento, sangria e fechar. Estorno é pelo cancelamento da venda. */
 export function CashScreen() {
   const client = useQueryClient();
   const user = auth.user();
@@ -41,7 +40,6 @@ export function CashScreen() {
   });
   const [viewing, setViewing] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<'suprimento' | 'sangria' | 'close' | null>(null);
-  const [reversing, setReversing] = useState<CashMovement | null>(null);
   const refresh = () => {
     client.invalidateQueries({ queryKey: ['cash-current'] });
     client.invalidateQueries({ queryKey: ['cash-history'] });
@@ -51,7 +49,7 @@ export function CashScreen() {
 
   return (
     <div className="max-w-5xl">
-      <PageHeader title="Caixa" subtitle="Todo recebimento de O.S. entra no caixa aberto da loja." />
+      <PageHeader title="Abrir e fechar caixa" subtitle="Toda venda entra no caixa aberto da loja. Para vender, use Caixa (PDV)." action={<Link to="/vender" className="btn-primary">Ir para o PDV</Link>} />
       {allowed.length > 1 && (
         <select className="input mb-4 w-auto" value={storeId} onChange={(e) => setStoreId(e.target.value)} aria-label="Loja">
           {allowed.map((st) => (
@@ -94,7 +92,7 @@ export function CashScreen() {
             <Summary s={s} />
           </div>
           <h2 className="mb-2 mt-6 text-sm font-semibold">Lançamentos</h2>
-          <Movements s={s} onReverse={can('cash.close') ? setReversing : undefined} />
+          <Movements s={s} />
         </>
       )}
 
@@ -136,7 +134,6 @@ export function CashScreen() {
 
       {s && (drawer === 'suprimento' || drawer === 'sangria') && <ManualDrawer session={s} type={drawer} onClose={() => setDrawer(null)} onDone={() => { refresh(); setDrawer(null); }} />}
       {s && drawer === 'close' && <CloseDrawer session={s} onClose={() => setDrawer(null)} onDone={() => { refresh(); setDrawer(null); }} />}
-      {reversing && <ReverseDrawer movement={reversing} onClose={() => setReversing(null)} onDone={() => { refresh(); setReversing(null); }} />}
       {viewing && <PastDrawer id={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
@@ -169,7 +166,7 @@ function Summary({ s }: { s: CashSession }) {
   );
 }
 
-function Movements({ s, onReverse }: { s: CashSession; onReverse?: (m: CashMovement) => void }) {
+function Movements({ s }: { s: CashSession }) {
   return (
     <div className="card overflow-x-auto">
       {!s.movements.length ? (
@@ -194,7 +191,7 @@ function Movements({ s, onReverse }: { s: CashSession; onReverse?: (m: CashMovem
                   {m.type === 'recebimento' || m.type === 'estorno' ? (
                     <>
                       {m.type === 'estorno' && 'Estorno · '}
-                      {m.orderId ? <Link to={`/os/${m.orderId}`} className="text-brand">O.S. {m.orderNumber}</Link> : null} {m.customerName && <span className="text-ink-soft">· {m.customerName}</span>}
+                      {m.saleId ? <Link to={`/vendas/${m.saleId}`} className="text-brand">Venda {m.saleNumber}</Link> : null} {m.customerName && <span className="text-ink-soft">· {m.customerName}</span>}
                     </>
                   ) : (
                     CASH_MOVEMENT_TYPES[m.type].split(' (')[0]
@@ -205,11 +202,7 @@ function Movements({ s, onReverse }: { s: CashSession; onReverse?: (m: CashMovem
                 <td>{m.userName ?? '—'}</td>
                 <td className={`text-right tabular-nums ${m.amount < 0 ? 'text-red-600' : ''}`}>{formatMoney(m.amount)}</td>
                 <td className="text-right">
-                  {onReverse && m.type === 'recebimento' && !m.reversed && s.status === 'open' && (
-                    <button className="text-xs text-ink-soft hover:text-red-600" onClick={() => onReverse(m)}>
-                      Estornar
-                    </button>
-                  )}
+
                 </td>
               </tr>
             ))}
@@ -324,30 +317,6 @@ function CloseDrawer({ session, onClose, onDone }: { session: CashSession; onClo
           Fechar caixa
         </button>
       </form>
-    </Drawer>
-  );
-}
-
-export function ReverseDrawer({ movement, onClose, onDone }: { movement: { id: string; amount: number; methodName: string | null }; onClose: () => void; onDone: () => void }) {
-  const [reason, setReason] = useState('');
-  const save = useMutation({
-    mutationFn: () => api(`/cash/movements/${movement.id}/reverse`, { method: 'POST', json: { reason } }),
-    onSuccess: onDone,
-  });
-  return (
-    <Drawer title="Estornar recebimento" onClose={onClose}>
-      <div className="space-y-4">
-        <p className="text-sm">
-          Estornar {formatMoney(movement.amount)} ({movement.methodName ?? 'dinheiro'}). O valor volta a ficar em aberto na O.S. e o estorno fica registrado.
-        </p>
-        <Field label="Motivo">
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
-        </Field>
-        <ErrorBox error={save.error} />
-        <button className="btn-primary w-full bg-red-600 hover:bg-red-700" disabled={reason.trim().length < 3 || save.isPending} onClick={() => save.mutate()}>
-          Estornar
-        </button>
-      </div>
     </Drawer>
   );
 }

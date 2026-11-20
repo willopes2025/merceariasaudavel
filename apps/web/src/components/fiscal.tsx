@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { FISCAL_STATUS, fiscalCancelSchema, formatMoney, type FiscalDocument, type FiscalPreview } from '@mercearia/contracts';
 import { api, can } from '../lib/api';
 import { Drawer, ErrorBox, Field } from './ui';
-import { formatDateTime } from './os';
+import { formatDateTime } from './format';
 
 const COLORS: Record<FiscalDocument['status'], string> = {
   processing: 'bg-amber-50 text-amber-700',
@@ -24,7 +24,7 @@ export function FiscalBadge({ doc }: { doc: FiscalDocument }) {
 }
 
 /** Notas com as ações: abrir o cupom, atualizar e cancelar. */
-export function FiscalTable({ rows, showOrder, onChanged }: { rows: FiscalDocument[]; showOrder?: boolean; onChanged: () => void }) {
+export function FiscalTable({ rows, showSale, onChanged }: { rows: FiscalDocument[]; showSale?: boolean; onChanged: () => void }) {
   const [canceling, setCanceling] = useState<FiscalDocument | null>(null);
   const refresh = useMutation({ mutationFn: (id: string) => api(`/fiscal/documents/${id}/refresh`, { method: 'POST' }), onSettled: onChanged });
   return (
@@ -34,7 +34,7 @@ export function FiscalTable({ rows, showOrder, onChanged }: { rows: FiscalDocume
         <thead>
           <tr>
             <th>Nota</th>
-            {showOrder && <th>O.S.</th>}
+            {showSale && <th>Venda</th>}
             <th>Situação</th>
             <th className="text-right">Valor</th>
             <th />
@@ -50,10 +50,10 @@ export function FiscalTable({ rows, showOrder, onChanged }: { rows: FiscalDocume
                   {d.userName && ` · ${d.userName}`}
                 </div>
               </td>
-              {showOrder && (
+              {showSale && (
                 <td>
-                  <Link to={`/os/${d.orderId}`} className="font-medium text-brand">
-                    O.S. {d.orderNumber ?? ''}
+                  <Link to={`/vendas/${d.saleId}`} className="font-medium text-brand">
+                    Venda {d.saleNumber ?? ''}
                   </Link>
                   <div className="text-xs text-ink-soft">{[d.customerName, d.storeName].filter(Boolean).join(' · ')}</div>
                 </td>
@@ -125,13 +125,14 @@ function CancelDrawer({ doc, onClose, onDone }: { doc: FiscalDocument; onClose: 
   );
 }
 
-/** Bloco "Nota fiscal" da O.S.: mostra as notas e emite a NFC-e. */
-export function OrderFiscal({ orderId }: { orderId: string }) {
+/** Bloco "Nota fiscal" da venda: mostra as notas e emite a NFC-e. */
+export function SaleFiscal({ saleId }: { saleId: string }) {
   const client = useQueryClient();
-  const q = useQuery({ queryKey: ['order-fiscal', orderId], queryFn: () => api<FiscalPreview>(`/service-orders/${orderId}/fiscal`) });
+  const q = useQuery({ queryKey: ['sale-fiscal', saleId], queryFn: () => api<FiscalPreview>(`/sales/${saleId}/fiscal`) });
   const [emitting, setEmitting] = useState(false);
   const reload = () => {
-    client.invalidateQueries({ queryKey: ['order-fiscal', orderId] });
+    client.invalidateQueries({ queryKey: ['sale-fiscal', saleId] });
+    client.invalidateQueries({ queryKey: ['sale', saleId] });
     client.invalidateQueries({ queryKey: ['fiscal-documents'] });
   };
   if (!q.data) return null;
@@ -159,7 +160,7 @@ export function OrderFiscal({ orderId }: { orderId: string }) {
           )}
         </p>
       )}
-      {p.ready && !p.documents.length && <p className="text-sm text-ink-soft">Nenhuma nota emitida para esta O.S.</p>}
+      {p.ready && !p.documents.length && <p className="text-sm text-ink-soft">Nenhuma nota emitida para esta venda.</p>}
       {p.documents.length > 0 && (
         <div className="overflow-x-auto">
           <FiscalTable rows={p.documents} onChanged={reload} />
@@ -167,7 +168,7 @@ export function OrderFiscal({ orderId }: { orderId: string }) {
       )}
       {emitting && (
         <EmitDrawer
-          orderId={orderId}
+          saleId={saleId}
           preview={p}
           onClose={() => setEmitting(false)}
           onDone={() => {
@@ -180,11 +181,11 @@ export function OrderFiscal({ orderId }: { orderId: string }) {
   );
 }
 
-function EmitDrawer({ orderId, preview: p, onClose, onDone }: { orderId: string; preview: FiscalPreview; onClose: () => void; onDone: () => void }) {
+function EmitDrawer({ saleId, preview: p, onClose, onDone }: { saleId: string; preview: FiscalPreview; onClose: () => void; onDone: () => void }) {
   const [includeCustomer, setInclude] = useState(Boolean(p.customer.document));
   const [error, setError] = useState<unknown>(null);
   const emit = useMutation({
-    mutationFn: () => api<FiscalDocument>(`/service-orders/${orderId}/fiscal/nfce`, { method: 'POST', json: { includeCustomer } }),
+    mutationFn: () => api<FiscalDocument>(`/sales/${saleId}/fiscal/nfce`, { method: 'POST', json: { includeCustomer } }),
     onSuccess: onDone,
     onError: setError,
   });

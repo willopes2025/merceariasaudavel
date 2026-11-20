@@ -47,8 +47,7 @@ jobs:
       - run: ./scripts/build-release.sh
       - name: Ponta a ponta
         run: |
-          # A carga do ssÓtica é testada contra um ssÓtica falso que o e2e-import sobe na porta 4999.
-          PORT=3000 SSOTICA_BASE_URL=http://localhost:4999 SSOTICA_TOKEN=token-de-teste SSOTICA_CNPJ=07585769000168 WHATSAPP_WEBHOOK_URL='http://localhost:4998/enviar?token=tok-teste' ASAAS_API_KEY='$aact_hmlg_chave-de-teste-0000000000000000' ASAAS_BASE_URL=http://localhost:4997/v3 ASAAS_WEBHOOK_TOKEN=segredo-do-webhook-de-teste-0123456789 FOCUS_NFE_BASE_URL=http://localhost:4996 NOTIFY_INTERVAL_MS=1000 node apps/api/dist/main.js > api.log 2>&1 &
+          PORT=3000 FOCUS_NFE_BASE_URL=http://localhost:4996 node apps/api/dist/main.js > api.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://localhost:3000/v1/health && break; sleep 1; done
           curl -fsS http://localhost:3000/ | grep -q '<div id="root">'
           E2E_BASE=http://localhost:3000 E2E_DATABASE_URL=$DATABASE_URL \

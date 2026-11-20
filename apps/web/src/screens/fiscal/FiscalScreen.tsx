@@ -26,7 +26,7 @@ export function FiscalScreen() {
     <div className="max-w-6xl">
       <PageHeader
         title="Notas fiscais"
-        subtitle="NFC-e emitidas pelas O.S. A nota é emitida dentro da própria O.S."
+        subtitle="NFC-e das vendas do caixa. A nota sai sozinha ao finalizar a venda (se ligado) ou pela tela da venda."
         action={
           can('settings.manage') && (
             <Link className="btn-ghost" to="/configuracoes/fiscal">
@@ -57,7 +57,7 @@ export function FiscalScreen() {
       </div>
       <ErrorBox error={list.error} />
       <div className="card overflow-x-auto">
-        {list.isLoading ? <Loading /> : !list.data?.items.length ? <Empty>Nenhuma nota nesse período.</Empty> : <FiscalTable rows={list.data.items} showOrder onChanged={() => client.invalidateQueries({ queryKey: ['fiscal-documents'] })} />}
+        {list.isLoading ? <Loading /> : !list.data?.items.length ? <Empty>Nenhuma nota nesse período.</Empty> : <FiscalTable rows={list.data.items} showSale onChanged={() => client.invalidateQueries({ queryKey: ['fiscal-documents'] })} />}
       </div>
       {pages > 1 && (
         <div className="mt-3 flex items-center justify-end gap-3 text-sm">
