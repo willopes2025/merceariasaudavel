@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercearia Saudável · Arquitetura do Sistema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f3ec; --paper:#fffdf8; --ink:#1f2a1f; --mute:#5d6b5c; --line:#e3ddcf;
+  --green:#2f6b3a; --green2:#4f9a5c; --leaf:#dcebd3; --sun:#f2b84b; --sun2:#fff2d6;
+  --clay:#c8643b; --clay2:#fbe4d9; --sky:#2d6f8f; --sky2:#dcedf5; --plum:#6b4a8a; --plum2:#ece3f5;
+  --r:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:700;letter-spacing:-.01em}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+section{padding:64px 0}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green)}
+.lead{font-size:18px;color:var(--mute);max-width:720px}
+h2{font-size:clamp(28px,4vw,40px);margin:8px 0 14px}
+
+/* NAV */
+nav.top{position:sticky;top:0;z-index:20;background:rgba(246,243,236,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;align-items:center;gap:18px;height:58px;overflow-x:auto}
+nav.top .brand{font-family:Fraunces,serif;font-weight:700;white-space:nowrap;display:flex;gap:8px;align-items:center}
+nav.top a{color:var(--mute);text-decoration:none;font-size:14px;font-weight:500;white-space:nowrap}
+nav.top a:hover{color:var(--green)}
+.dot{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 35%,var(--green2),var(--green));display:inline-block}
+
+/* HERO */
+.hero{padding:72px 0 48px}
+.hero h1{font-size:clamp(36px,6vw,64px);line-height:1.05;margin:12px 0 18px}
+.hero h1 em{font-style:normal;color:var(--green)}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.pill{background:var(--paper);border:1px solid var(--line);border-radius:99px;padding:7px 14px;font-size:14px;font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:40px}
+.kpi{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.kpi b{font-family:Fraunces,serif;font-size:36px;color:var(--green);display:block;line-height:1}
+.kpi span{font-size:14px;color:var(--mute)}
+
+/* ARCH DIAGRAM */
+.arch{background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:28px;margin-top:28px}
+.layer{display:grid;grid-template-columns:160px 1fr;gap:16px;align-items:stretch;margin-bottom:14px}
+.layer:last-child{margin-bottom:0}
+.lname{border-radius:12px;padding:14px;font-weight:700;font-size:14px;display:flex;flex-direction:column;justify-content:center}
+.lname small{font-weight:400;font-size:12px;opacity:.8}
+.boxes{display:flex;flex-wrap:wrap;gap:8px;align-content:center;border:1.5px dashed var(--line);border-radius:12px;padding:12px}
+.box{border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;background:#fff;border:1px solid var(--line)}
+.L1 .lname{background:var(--sun2);color:#7a5410}.L1 .box{border-color:#f0d9a6}
+.L2 .lname{background:var(--leaf);color:var(--green)}.L2 .box{border-color:#c4dcb8}
+.L3 .lname{background:var(--sky2);color:var(--sky)}.L3 .box{border-color:#bcd9e7}
+.L4 .lname{background:var(--plum2);color:var(--plum)}.L4 .box{border-color:#d6c6e6}
+.L5 .lname{background:var(--clay2);color:var(--clay)}.L5 .box{border-color:#f0c6b3}
+.arrow{text-align:center;color:var(--mute);font-size:12px;margin:-4px 0 10px;letter-spacing:.1em}
+
+/* APP SHELL */
+.shell{display:grid;grid-template-columns:270px 1fr;background:var(--paper);border:1px solid var(--line);border-radius:22px;overflow:hidden;margin-top:28px;min-height:640px;box-shadow:0 20px 50px -30px rgba(31,42,31,.35)}
+.side{background:#18261a;color:#d8e4d4;padding:18px 12px;overflow-y:auto;max-height:780px}
+.side .logo{font-family:Fraunces,serif;font-size:18px;color:#fff;padding:4px 10px 16px;display:flex;gap:8px;align-items:center}
+.grp{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8fa68b;padding:14px 10px 6px;font-weight:700}
+.tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;font-size:14px;padding:8px 10px;border-radius:9px;cursor:pointer}
+.tab:hover{background:rgba(255,255,255,.06)}
+.tab.on{background:var(--green2);color:#fff;font-weight:600}
+.tab .n{font-size:11px;opacity:.6;width:18px}
+.tab .new{margin-left:auto;font-size:10px;background:var(--sun);color:#3d2a00;border-radius:6px;padding:1px 6px;font-weight:700}
+.main{padding:26px 28px;overflow:hidden}
+.mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:18px}
+.mhead h3{font-size:28px}
+.mhead p{color:var(--mute);max-width:560px}
+.badge{font-size:12px;font-weight:700;border-radius:99px;padding:5px 12px;white-space:nowrap}
+.mk{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.mk div{background:var(--bg);border-radius:12px;padding:12px}
+.mk b{font-family:Fraunces,serif;font-size:22px;display:block}
+.mk span{font-size:12px;color:var(--mute)}
+.cols{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}
+.feat h4,.ai h4{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--mute);margin-bottom:10px}
+.feat ul{list-style:none;display:grid;gap:8px}
+.feat li{display:flex;gap:10px;font-size:14.5px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.feat li:before{content:"";flex:0 0 8px;height:8px;border-radius:50%;background:var(--green2);margin-top:7px}
+.ai{background:linear-gradient(160deg,#20351f,#2f6b3a);color:#eaf3e6;border-radius:14px;padding:16px}
+.ai h4{color:#b9d6b0}
+.ai p{font-size:14.5px;margin-bottom:10px}
+.ai .chip{display:inline-block;background:rgba(255,255,255,.12);border-radius:8px;padding:4px 9px;font-size:12px;margin:0 6px 6px 0}
+.conn{margin-top:14px;font-size:13px;color:var(--mute)}
+.conn b{color:var(--ink)}
+.mobile-pick{display:none;width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);font:inherit;font-size:15px;background:#fff;margin-bottom:14px}
+
+/* GRID LIST */
+.groups{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}
+.gcard{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.gcard h3{font-size:20px;margin-bottom:4px}
+.gcard p{font-size:13px;color:var(--mute);margin-bottom:12px}
+.gcard ol{padding-left:18px;font-size:14px;display:grid;gap:4px}
+.gcard ol li::marker{color:var(--mute);font-size:12px}
+.gcard ol li{cursor:pointer}
+.gcard ol li:hover{color:var(--green)}
+
+/* DIFERENCIAIS */
+.diffs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}
+.diff{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.diff .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;margin-bottom:12px}
+.diff h3{font-size:18px;margin-bottom:6px}
+.diff p{font-size:14px;color:var(--mute)}
+
+/* FLOW */
+.flow{display:flex;gap:0;margin-top:28px;overflow-x:auto;padding-bottom:6px}
+.step{flex:1 0 170px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;margin-right:22px}
+.step:not(:last-child):after{content:"→";position:absolute;right:-18px;top:50%;transform:translateY(-50%);color:var(--green);font-weight:700}
+.step b{display:block;font-size:12px;color:var(--green);letter-spacing:.1em;text-transform:uppercase}
+.step h4{font-size:15px;margin:4px 0}
+.step p{font-size:13px;color:var(--mute)}
+
+/* ROADMAP */
+.road{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}
+.phase{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:20px;border-top:5px solid var(--green2)}
+.phase:nth-child(2){border-top-color:var(--sun)}
+.phase:nth-child(3){border-top-color:var(--clay)}
+.phase h3{font-size:20px}
+.phase .when{font-size:13px;color:var(--mute);margin-bottom:12px}
+.phase ul{padding-left:18px;font-size:14px;display:grid;gap:5px}
+
+/* STACK */
+.stack{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:28px}
+.st{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.st h3{font-size:18px;margin-bottom:10px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 10px}
+
+.cta{background:#18261a;color:#eaf3e6;border-radius:26px;padding:44px;margin:20px 0 70px}
+.cta h2{color:#fff}
+.cta ol{padding-left:20px;display:grid;gap:8px;font-size:16px;margin-top:14px;max-width:760px}
+footer{text-align:center;color:var(--mute);font-size:13px;padding:0 0 40px}
+
+@media (max-width:900px){
+  .kpis,.groups{grid-template-columns:repeat(2,1fr)}
+  .diffs,.road{grid-template-columns:1fr}
+  .shell{grid-template-columns:1fr}
+  .side{display:none}
+  .mobile-pick{display:block}
+  .cols{grid-template-columns:1fr}
+  .mk{grid-template-columns:repeat(2,1fr)}
+  .layer{grid-template-columns:1fr}
+  .stack{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .kpis,.groups{grid-template-columns:1fr}
+  section{padding:44px 0}
+  .main{padding:18px}
+  .cta{padding:28px}
+}
+</style>
+</head>
+<body>
+
+<nav class="top"><div class="wrap">
+  <span class="brand"><span class="dot"></span>Mercearia Saudável</span>
+  <a href="#visao">Visão</a>
+  <a href="#arquitetura">Arquitetura</a>
+  <a href="#sistema">Abas do sistema</a>
+  <a href="#mapa">Mapa</a>
+  <a href="#app-estrategia">App</a><a href="#ia">Inteligência</a>
+  <a href="#fluxo">Fluxo do pedido</a>
+  <a href="#fases">Fases</a>
+</div></nav>
+
+<header class="hero" id="visao"><div class="wrap">
+  <div class="eyebrow">Proposta de arquitetura · Wide Inteligência Comercial</div>
+  <h1>Uma plataforma só para <em>vender mais</em> na loja, no site, no WhatsApp e nos marketplaces.</h1>
+  <p class="lead">Um sistema único que junta frente de caixa, loja online, marketplaces, estoque inteligente, CRM com WhatsApp e financeiro — com um só estoque, um só cadastro de produto e um só painel de faturamento.</p>
+  <div class="pills">
+    <span class="pill">📱 App iOS e Android</span><span class="pill">🏪 Loja física</span><span class="pill">🛒 Loja online</span><span class="pill">📦 Marketplaces</span>
+    <span class="pill">💬 WhatsApp</span><span class="pill">🛵 Delivery e iFood</span><span class="pill">🥤 Shakes e sorvetes</span><span class="pill">🤖 IA de estoque e recompra</span><span class="pill">🎥 Câmeras com IA</span><span class="pill">📺 Painel na TV</span>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><b>28</b><span>abas organizadas em 4 áreas</span></div>
+    <div class="kpi"><b>5+</b><span>canais de venda num estoque só</span></div>
+    <div class="kpi"><b>1</b><span>cadastro de produto para todos os canais</span></div>
+    <div class="kpi"><b>3</b><span>fases de entrega, começando pelo que fatura</span></div>
+  </div>
+</div></header>
+
+<section id="arquitetura" style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">Arquitetura</div>
+  <h2>Como o sistema se organiza</h2>
+  <p class="lead">Todos os canais caem no mesmo núcleo. Uma venda no Mercado Livre baixa o mesmo estoque da prateleira; uma cliente que compra no balcão entra no mesmo CRM de quem compra pelo WhatsApp.</p>
+
+  <div class="arch">
+    <div class="layer L1"><div class="lname">Canais de venda<small>onde a cliente compra</small></div>
+      <div class="boxes"><span class="box">App da cliente (iOS e Android)</span><span class="box">PDV da loja</span><span class="box">Loja online própria</span><span class="box">WhatsApp + catálogo</span><span class="box">Mercado Livre</span><span class="box">Shopee</span><span class="box">Amazon</span><span class="box">iFood / 99Food</span><span class="box">Totem e cardápio QR</span><span class="box">Instagram Shopping</span></div></div>
+    <div class="arrow">▼ TODOS OS PEDIDOS ENTRAM NA MESMA CENTRAL ▼</div>
+    <div class="layer L2"><div class="lname">Núcleo comercial<small>vender e atender</small></div>
+      <div class="boxes"><span class="box">Central de pedidos omnichannel</span><span class="box">CRM de clientes</span><span class="box">Atendimento WhatsApp + agente IA</span><span class="box">Precificação por canal</span><span class="box">Promoções e cupons</span><span class="box">Clube / assinaturas</span><span class="box">Parceiros nutris e personais</span><span class="box">Montador de kit IA</span></div></div>
+    <div class="layer L3"><div class="lname">Núcleo operacional<small>abastecer e entregar</small></div>
+      <div class="boxes"><span class="box">Catálogo único de produtos</span><span class="box">Estoque por lote e validade</span><span class="box">Inteligência de estoque</span><span class="box">Compras e fornecedores</span><span class="box">Shakes, sorvetes e insumos</span><span class="box">Tela de preparo</span><span class="box">Separação e expedição</span><span class="box">Entregas</span></div></div>
+    <div class="layer L4"><div class="lname">Gestão<small>controlar o dinheiro</small></div>
+      <div class="boxes"><span class="box">Financeiro e fluxo de caixa</span><span class="box">Conciliação de repasses</span><span class="box">DRE por canal</span><span class="box">Fiscal NFC-e / NF-e</span><span class="box">Relatórios e BI</span><span class="box">Quadro de gestão e metas</span><span class="box">Câmeras com IA</span><span class="box">Painel da TV</span></div></div>
+    <div class="arrow">▼ INTEGRAÇÕES ▼</div>
+    <div class="layer L5"><div class="lname">Serviços externos<small>via API</small></div>
+      <div class="boxes"><span class="box">Focus NFe</span><span class="box">Asaas (Pix, boleto, link)</span><span class="box">TEF / maquininha</span><span class="box">Balança e leitor</span><span class="box">APIs dos marketplaces</span><span class="box">WhatsApp oficial (Meta)</span><span class="box">iFood / 99Food</span><span class="box">Melhor Envio / Correios</span><span class="box">Meta Ads e Google Ads</span><span class="box">Câmeras IP</span><span class="box">Play Store e App Store</span><span class="box">Claude (IA)</span></div></div>
+  </div>
+</div></section>
+
+<section id="sistema" style="background:var(--paper);border-top:1px solid var(--line);border-bottom:1px solid var(--line)"><div class="wrap">
+  <div class="eyebrow">Protótipo navegável</div>
+  <h2>As abas do sistema</h2>
+  <p class="lead">Clique em cada aba no menu para ver o que ela faz, os indicadores que mostra e onde a inteligência artificial entra.</p>
+
+  <div class="shell">
+    <aside class="side" id="side"></aside>
+    <div class="main">
+      <select class="mobile-pick" id="pick" aria-label="Escolher aba"></select>
+      <div id="screen"></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="mapa"><div class="wrap">
+  <div class="eyebrow">Mapa completo</div>
+  <h2>28 abas em 4 áreas</h2>
+  <p class="lead">A mesma lista do menu, vista de uma vez só. Clique em qualquer item para abrir a aba no protótipo.</p>
+  <div class="groups" id="groups"></div>
+</div></section>
+
+<section id="app-estrategia" style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">Estratégia do aplicativo</div>
+  <h2>Quem tem o app paga menos, e por isso instala</h2>
+  <p class="lead">O preço de membro é o motivo para instalar. Cada instalação vira uma cliente identificada, que recebe notificação de graça e volta a comprar sem custo de anúncio.</p>
+  <div class="flow">
+    <div class="step"><b>1 · Atrair</b><h4>Vê os dois preços</h4><p>Etiqueta, totem, TV e site mostram: "R$ 189 · no app R$ 169".</p></div>
+    <div class="step"><b>2 · Instalar</b><h4>QR no balcão</h4><p>A atendente oferece no caixa: "baixa o app e já paga o preço de membro hoje".</p></div>
+    <div class="step"><b>3 · Identificar</b><h4>Carteirinha</h4><p>QR do app ou CPF no caixa libera o preço de membro e soma cashback.</p></div>
+    <div class="step"><b>4 · Reter</b><h4>Notificação</h4><p>Lembrete de recompra, oferta do dia, shake pronto para buscar.</p></div>
+    <div class="step"><b>5 · Medir</b><h4>Meta de instalações</h4><p>Instalações por vendedora entram no quadro de metas e na comissão.</p></div>
+  </div>
+  <div class="stack">
+    <div class="st"><h3>Regras do preço de membro</h3><div class="tags"><span class="tag">Vale em produtos escolhidos, não na loja toda</span><span class="tag">Diferença em R$ ou %</span><span class="tag">Os dois preços sempre visíveis</span><span class="tag">Vale na loja, no app e no site</span><span class="tag">Ser membro é grátis: basta instalar o app</span></div></div>
+    <div class="st"><h3>Publicação nas lojas</h3><div class="tags"><span class="tag">Conta de desenvolvedor no nome da empresa</span><span class="tag">Google Play: taxa única</span><span class="tag">Apple: anuidade</span><span class="tag">Apple pede D-U-N-S para conta de empresa</span><span class="tag">Revisão da Apple exige recursos de app (carteirinha, notificação, leitor)</span></div></div>
+  </div>
+</div></section>
+
+<section id="ia" style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">Inteligência que gera faturamento</div>
+  <h2>O que faz esse sistema vender mais</h2>
+  <div class="diffs">
+    <div class="diff"><div class="ic" style="background:var(--leaf)">🔁</div><h3>Recompra automática</h3><p>O sistema calcula quando o whey, a creatina ou o colágeno da cliente vai acabar e manda a mensagem no WhatsApp uns dias antes, com link de compra pronto.</p></div>
+    <div class="diff"><div class="ic" style="background:var(--sun2)">⏳</div><h3>Validade vira promoção</h3><p>Produto perto do vencimento entra sozinho numa oferta (loja, site e WhatsApp) antes de virar perda. Sai de FEFO direto para campanha.</p></div>
+    <div class="diff"><div class="ic" style="background:var(--sky2)">📉</div><h3>Ruptura prevista</h3><p>Avisa o que vai faltar na prateleira nos próximos dias, pelo ritmo de venda de todos os canais, e já monta a sugestão de compra.</p></div>
+    <div class="diff"><div class="ic" style="background:var(--clay2)">🧺</div><h3>Combos que vendem juntos</h3><p>Descobre o que sai junto (whey + garrafa Pacco, barrinha + gel) e sugere kits e "leve também" no PDV, no site e no atendimento.</p></div>
+    <div class="diff"><div class="ic" style="background:var(--plum2)">💬</div><h3>Agente de IA no WhatsApp</h3><p>Tira dúvida de produto, recomenda pelo objetivo (ganho de massa, low carb, sem glúten), monta o carrinho e passa para a equipe fechar.</p></div>
+    <div class="diff"><div class="ic" style="background:var(--leaf)">🏷️</div><h3>Preço certo por canal</h3><p>Calcula a margem real de cada canal descontando taxa do marketplace, frete e imposto, e mostra onde cada produto dá mais lucro.</p></div>
+  </div>
+</div></section>
+
+<section id="fluxo" style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">Ponta a ponta</div>
+  <h2>A vida de um pedido</h2>
+  <div class="flow">
+    <div class="step"><b>1 · Entrada</b><h4>Pedido chega</h4><p>Do balcão, site, WhatsApp ou marketplace, cai na Central de Pedidos.</p></div>
+    <div class="step"><b>2 · Reserva</b><h4>Estoque reserva</h4><p>O lote com validade mais curta é reservado e o saldo atualiza em todos os canais.</p></div>
+    <div class="step"><b>3 · Pagamento</b><h4>Recebe</h4><p>Pix, cartão, link ou repasse do marketplace, já lançado no financeiro.</p></div>
+    <div class="step"><b>4 · Fiscal</b><h4>Nota sai sozinha</h4><p>NFC-e no balcão, NF-e no online, via Focus NFe.</p></div>
+    <div class="step"><b>5 · Expedição</b><h4>Separa e entrega</h4><p>Lista de separação, etiqueta, rota de entrega ou retirada na loja.</p></div>
+    <div class="step"><b>6 · Pós-venda</b><h4>Volta a comprar</h4><p>Cashback, pedido de avaliação e lembrete de recompra no WhatsApp.</p></div>
+  </div>
+</div></section>
+
+<section id="fases" style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">Implantação</div>
+  <h2>Entrega em 3 fases</h2>
+  <p class="lead">A ordem começa pelo que coloca dinheiro no caixa e pelo que precisa estar certo para os outros módulos funcionarem: produto, estoque e venda.</p>
+  <div class="road">
+    <div class="phase"><h3>Fase 1 · Base que vende</h3><div class="when">Operação da loja rodando</div>
+      <ul><li>Produtos & Catálogo</li><li>Estoque (lote e validade)</li><li>Fichas técnicas, insumos e tela de preparo</li><li>PDV com NFC-e</li><li>Clientes / CRM básico</li><li>Financeiro e caixa</li><li>Painel geral + painel da TV</li><li>Quadro de gestão e metas</li><li>Preço de membro e não membro</li><li>Migração dos cadastros atuais</li></ul></div>
+    <div class="phase"><h3>Fase 2 · Omnichannel</h3><div class="when">Vender em todos os canais</div>
+      <ul><li>App da cliente na Play Store e App Store</li><li>Loja online própria</li><li>Marketplaces (ML, Shopee, Amazon)</li><li>Central de pedidos e expedição</li><li>WhatsApp + catálogo + agente IA</li><li>Entregas, iFood e 99Food</li><li>Totem e cardápio QR</li><li>Precificação por canal</li></ul></div>
+    <div class="phase"><h3>Fase 3 · Inteligência</h3><div class="when">Crescer o faturamento</div>
+      <ul><li>Inteligência de estoque e compra sugerida</li><li>Recompra automática</li><li>Clube, cashback e assinaturas</li><li>Parceiros nutris e personais</li><li>Montador de kit por objetivo</li><li>Campanhas e rastreio de anúncios</li><li>Câmeras com IA e conversão da loja</li><li>DRE por canal e BI</li></ul></div>
+  </div>
+</div></section>
+
+<section style="padding-top:20px"><div class="wrap">
+  <div class="eyebrow">Tecnologia</div>
+  <h2>Base técnica</h2>
+  <div class="stack">
+    <div class="st"><h3>Plataforma</h3><div class="tags"><span class="tag">Sistema web, sem instalação</span><span class="tag">Funciona no celular e no tablet</span><span class="tag">NestJS + Prisma</span><span class="tag">PostgreSQL</span><span class="tag">React</span><span class="tag">Docker em VPS</span><span class="tag">App React Native (iOS e Android)</span><span class="tag">Backup diário</span><span class="tag">Permissões por usuário</span></div></div>
+    <div class="st"><h3>Integrações</h3><div class="tags"><span class="tag">Focus NFe</span><span class="tag">Asaas</span><span class="tag">TEF / maquininha</span><span class="tag">Mercado Livre</span><span class="tag">Shopee</span><span class="tag">Amazon</span><span class="tag">iFood</span><span class="tag">99Food</span><span class="tag">WhatsApp API oficial</span><span class="tag">Melhor Envio</span><span class="tag">Meta / Google Ads</span><span class="tag">Claude IA</span></div></div>
+  </div>
+</div></section>
+
+<div class="wrap"><div class="cta">
+  <div class="eyebrow" style="color:#b9d6b0">Próximos passos</div>
+  <h2>Para fechar a proposta</h2>
+  <ol>
+    <li>Validar com a loja as abas e o que entra em cada fase.</li>
+    <li>Definir em quais marketplaces ela já vende ou quer vender primeiro.</li>
+    <li>Levantar o sistema atual (cadastros, estoque, notas) para a migração.</li>
+    <li>Fechar escopo, prazo e investimento, e começar pela Fase 1.</li>
+  </ol>
+</div></div>
+
+<footer>Mercearia Saudável · Arquitetura do sistema · Wide Inteligência Comercial · 2026</footer>
+
+<script>
+const G = {
+  vender:{nome:"Vender",cor:"var(--sun)",bg:"var(--sun2)",tx:"#7a5410",desc:"Todos os canais onde a cliente compra"},
+  operar:{nome:"Operar",cor:"var(--green2)",bg:"var(--leaf)",tx:"var(--green)",desc:"Produto, estoque, compra e entrega"},
+  crescer:{nome:"Crescer",cor:"var(--plum)",bg:"var(--plum2)",tx:"var(--plum)",desc:"Cliente, WhatsApp, fidelidade e marketing"},
+  gerir:{nome:"Gerir",cor:"var(--sky)",bg:"var(--sky2)",tx:"var(--sky)",desc:"Dinheiro, impostos, números e equipe"}
+};
+const T = [
+ {id:"painel",g:"gerir",ic:"📊",n:"Painel geral",d:"A tela de abertura: quanto vendeu hoje, em qual canal, contra a meta, e o que precisa de atenção agora.",
+  k:[["R$ 8.420","vendas hoje"],["62%","da meta do mês"],["R$ 94","ticket médio"],["7","alertas"]],
+  f:["Faturamento do dia, semana e mês por canal (loja, site, WhatsApp, marketplaces)","Meta mensal com projeção de fechamento","Margem bruta e ticket médio","Pessoas que entraram x vendas (conversão da loja pelas câmeras)","Alertas: ruptura, validade, pedido atrasado, pergunta sem resposta","Top 10 produtos e categorias do período"],
+  ai:"Resumo diário escrito pela IA: o que subiu, o que caiu e as 3 ações do dia para vender mais.",c:"Lê de todas as abas"},
+ {id:"pdv",g:"vender",ic:"🧾",n:"PDV / Frente de caixa",d:"Caixa rápido para o balcão, com balança, leitor de código de barras, granel e nota fiscal na hora.",
+  k:[["38s","tempo médio de venda"],["3","caixas abertos"],["R$ 2.910","no caixa agora"],["41%","pagamento Pix"]],
+  f:["Venda por código de barras, busca ou balança (granel por peso)","Pix com QR na tela, cartão via TEF, dinheiro, crediário e vale","NFC-e emitida automaticamente","Identificação da cliente pelo CPF ou telefone (cashback e histórico)","Abertura, sangria, suprimento e fechamento de caixa","Funciona offline e sincroniza quando a internet volta"],
+  ai:"Sugere o \"leve também\" no caixa com base no que está no carrinho (ex.: whey → coqueteleira Pacco).",c:"Focus NFe · TEF · balança · Asaas"},
+ {id:"app",g:"vender",ic:"📱",n:"App da cliente",d:"Aplicativo da Mercearia Saudável na Play Store e na App Store. Quem instala vira membro e paga o preço de membro.",new:true,
+  k:[["2.300","apps instalados"],["R$ 21","economia média do membro"],["46%","vendas de membros"],["1.840","com notificação ativa"]],
+  f:["Cadastro em 1 minuto: a cliente vira membro na hora","Preço de membro nos produtos escolhidos, mostrado ao lado do preço normal","Carteirinha digital com QR: mostra no caixa ou no totem e pega o preço de membro na loja","Compra pelo app com entrega, retirada na loja ou pedido de shake para buscar pronto","Saldo de cashback, histórico de compras e repetir pedido com 1 toque","Notificações: oferta do dia, lembrete de recompra, aviso de pedido pronto","Montador de kit por objetivo e cupons dos parceiros (nutricionistas e personal trainers)"],
+  ai:"Escolhe a oferta e o horário da notificação para cada cliente, pelo que ela costuma comprar.",c:"Catálogo · preços · CRM · cashback · PDV · pedidos"},
+ {id:"totem",g:"vender",ic:"🖥️",n:"Totem & cardápio QR",d:"Autoatendimento: a cliente monta o shake ou o sorvete, paga sozinha e o pedido vai para a tela de preparo.",new:true,
+  k:[["22%","pedidos no totem"],["R$ 3,10","adicional médio"],["0","fila no caixa"],["QR","em cada mesa"]],
+  f:["Totem com cardápio visual de shakes, sorvetes, açaí e snacks","Montagem do pedido com adicionais (whey extra, pasta de amendoim, frutas)","Pagamento no próprio totem por Pix ou cartão","Cardápio digital por QR code no celular da cliente","Pedido cai na tela de preparo e chama pelo nome quando fica pronto","Cliente se identifica pelo telefone e acumula cashback"],
+  ai:"Sugere adicional e upgrade de tamanho no momento do pedido para subir o ticket.",c:"PDV · tela de preparo · insumos · Asaas"},
+ {id:"pedidos",g:"vender",ic:"📥",n:"Central de pedidos",d:"Todos os pedidos de todos os canais numa fila só, do pagamento até a entrega.",
+  k:[["23","pedidos abertos"],["5","para separar"],["2","atrasados"],["6","canais ativos"]],
+  f:["Pedidos da loja online, WhatsApp, marketplaces e delivery na mesma lista","Status: novo → pago → separando → enviado → entregue","Filtro por canal, prazo e forma de entrega","Lista de separação e conferência por código de barras","Impressão de etiqueta e declaração","Troca, devolução e cancelamento com estorno de estoque"],
+  ai:"Prioriza a fila pelo prazo de cada marketplace para não perder reputação.",c:"Marketplaces · loja online · entregas"},
+ {id:"loja",g:"vender",ic:"🛒",n:"Loja online",d:"Site de vendas próprio, ligado ao mesmo estoque e cadastro, sem pagar comissão de marketplace.",
+  k:[["1.240","visitas hoje"],["2,8%","conversão"],["R$ 118","ticket online"],["14","carrinhos abandonados"]],
+  f:["Vitrine com categorias, filtros por objetivo e selos (vegano, sem glúten, zero açúcar)","Página de produto com tabela nutricional e modo de uso","Carrinho, cupom, frete calculado e retirada na loja","Pagamento por Pix, cartão e boleto","Recuperação de carrinho abandonado pelo WhatsApp","Editor de banners e vitrines de campanha (ex.: Black Friday)"],
+  ai:"Busca inteligente (\"algo pra levar no treino sem lactose\") e textos de produto gerados a partir do rótulo.",c:"Asaas · Melhor Envio"},
+ {id:"market",g:"vender",ic:"🏬",n:"Marketplaces",d:"Publica e controla os anúncios no Mercado Livre, Shopee, Amazon e iFood a partir do cadastro único.",
+  k:[["186","anúncios ativos"],["4","marketplaces"],["3","perguntas pendentes"],["98%","reputação"]],
+  f:["Publicar o mesmo produto em vários marketplaces de uma vez","Estoque e preço sincronizados automaticamente","Preço diferente por marketplace já com a taxa embutida","Responder perguntas e mensagens dos compradores","Acompanhar reputação, reclamações e devoluções","Conciliação dos repasses de cada marketplace"],
+  ai:"Sugere título e descrição para cada marketplace e responde perguntas frequentes sozinha.",c:"Mercado Livre · Shopee · Amazon · iFood"},
+ {id:"produtos",g:"operar",ic:"🥜",n:"Produtos & Catálogo",d:"Um cadastro só que alimenta o caixa, o site, o WhatsApp e todos os marketplaces.",
+  k:[["1.830","produtos"],["212","no granel"],["46","kits"],["18","sem foto"]],
+  f:["Cadastro com código de barras, NCM, CEST e tributação","Variações (sabor, tamanho, cor das garrafas Pacco)","Produtos a granel e fracionados por peso","Kits e combos com baixa de estoque dos itens","Tabela nutricional, ingredientes, alergênicos e selos","Fotos, descrições e categorias por canal"],
+  ai:"Lê a foto do rótulo e preenche ingredientes, tabela nutricional e selos; melhora a foto para catálogo.",c:"Base de todos os canais"},
+ {id:"estoque",g:"operar",ic:"📦",n:"Estoque",d:"Saldo real por loja e depósito, controlado por lote e validade.",
+  k:[["R$ 186 mil","em estoque"],["31","vencendo em 30 dias"],["12","em ruptura"],["0,8%","perdas no mês"]],
+  f:["Saldo por local (loja, depósito, reservado para pedidos)","Controle por lote e data de validade, com saída FEFO (vence primeiro, sai primeiro)","Entradas, saídas, transferências e ajustes com motivo","Inventário por contagem no celular","Registro de perdas, avarias e vencidos","Histórico completo de cada movimentação"],
+  ai:"Alerta de produto parado e de validade próxima já com sugestão do que fazer.",c:"PDV · pedidos · compras"},
+ {id:"intel",g:"operar",ic:"🧠",n:"Inteligência de estoque",d:"O cérebro do estoque: o que comprar, quanto, quando, e o que está prendendo dinheiro.",new:true,
+  k:[["R$ 22 mil","parado há 90+ dias"],["9","rupturas previstas"],["A: 68","produtos curva A"],["34 dias","cobertura média"]],
+  f:["Curva ABC por faturamento e por margem","Giro e cobertura de estoque em dias por produto","Previsão de ruptura considerando todos os canais","Sugestão de compra por fornecedor com quantidade","Estoque parado e capital empatado","Sazonalidade (verão, Black Friday, janeiro fitness)"],
+  ai:"Gera o pedido de compra sugerido e transforma validade próxima em promoção automática.",c:"Estoque · vendas · compras"},
+ {id:"insumos",g:"operar",ic:"🥤",n:"Shakes, sorvetes & insumos",d:"Controle do balcão de preparo: ficha técnica de cada shake e sorvete, baixa de insumos por venda e análise de perdas.",new:true,
+  k:[["R$ 7,40","custo do shake 400ml"],["68%","margem do preparo"],["3,2%","perda de insumos"],["14","fichas técnicas"]],
+  f:["Ficha técnica de cada receita (shake, sorvete, açaí, smoothie) com gramas de cada insumo","Venda do shake no PDV baixa automaticamente whey, leite, fruta, copo e tampa","Custo real e margem de cada receita, atualizados quando o custo do insumo muda","Consumo teórico x consumo real: mostra a perda (desperdício, porção maior, erro)","Registro de descarte e quebra de insumos com motivo","Validade dos insumos abertos (leite, fruta, base de sorvete)","Inventário diário dos insumos abertos no fechamento, pelo celular","Tela de preparo: o pedido sai do caixa, do totem ou do QR direto para quem prepara","Cardápio digital por QR code no balcão e nas mesas"],
+  ai:"Aponta onde está a perda (qual insumo, qual turno, qual receita) e sugere ajuste de porção ou de preço.",c:"PDV · estoque · compras · iFood"},
+ {id:"compras",g:"operar",ic:"🚚",n:"Compras & Fornecedores",d:"Do pedido ao fornecedor até a mercadoria entrar no estoque e a conta entrar no financeiro.",
+  k:[["38","fornecedores"],["4","pedidos em aberto"],["2","chegando hoje"],["R$ 41 mil","a pagar no mês"]],
+  f:["Cadastro de fornecedores (Pacco, distribuidores de suplementos, granel)","Pedido de compra a partir da sugestão da IA","Cotação entre fornecedores","Entrada por XML da NF-e, já criando lotes e validade","Contas a pagar geradas automaticamente","Histórico de preço de custo por fornecedor"],
+  ai:"Compara preço de custo entre fornecedores e avisa quando um custo subiu.",c:"Fiscal · financeiro"},
+ {id:"entregas",g:"operar",ic:"🛵",n:"Entregas",d:"Delivery próprio, retirada na loja e envio por transportadora num lugar só.",
+  k:[["17","entregas hoje"],["3","rotas"],["42 min","tempo médio"],["8","retiradas na loja"]],
+  f:["Pedidos do iFood e 99Food entrando direto na Central de Pedidos","Taxa de entrega por bairro ou distância","Roteiro de entrega para motoboy","Cotação e etiqueta Correios / Melhor Envio","Retirada na loja com aviso no WhatsApp","Rastreio enviado automaticamente para a cliente","Comprovante de entrega"],
+  ai:"Agrupa entregas por região e monta a melhor sequência de rota.",c:"iFood · 99Food · Melhor Envio · Correios"},
+ {id:"clientes",g:"crescer",ic:"👥",n:"Clientes / CRM",d:"Tudo sobre cada cliente, de qualquer canal: o que compra, quando e por quanto.",
+  k:[["6.420","clientes"],["1.180","ativos no mês"],["R$ 312","LTV médio"],["24%","recompram em 30 dias"]],
+  f:["Cadastro único (balcão, site, WhatsApp, marketplace)","Histórico de compras e canais preferidos","Segmentos: objetivo (massa, emagrecer, low carb, vegano), frequência e valor","Classificação RFM (fiéis, em risco, sumidos)","Aniversariantes e datas importantes","Funil de vendas para pedidos grandes e atacado"],
+  ai:"Identifica quem está para sumir e sugere a mensagem certa para trazer de volta.",c:"Todos os canais"},
+ {id:"whats",g:"crescer",ic:"💬",n:"WhatsApp & Atendimento",d:"Inbox da equipe com catálogo, carrinho e agente de IA, no estilo Widezap.",
+  k:[["64","conversas hoje"],["3 min","1ª resposta"],["31%","viram pedido"],["R$ 4.120","vendido no Whats"]],
+  f:["Inbox com vários atendentes no mesmo número","Envio de catálogo e link de pagamento na conversa","Pedido montado no chat cai direto na Central de Pedidos","Respostas rápidas e etiquetas","Disparo de templates oficiais da Meta","Controle da janela de 24h"],
+  ai:"Agente que responde dúvidas, recomenda produto pelo objetivo e monta o carrinho; passa para humana quando precisa.",c:"WhatsApp API oficial · Claude IA"},
+ {id:"recompra",g:"crescer",ic:"🔁",n:"Recompra automática",d:"Lembra a cliente de comprar de novo na hora certa, antes de ela comprar em outro lugar.",new:true,
+  k:[["312","lembretes no mês"],["27%","convertem"],["R$ 9.800","faturado"],["45 dias","ciclo médio do whey"]],
+  f:["Ciclo de consumo por produto (whey, creatina, colágeno, vitaminas)","Mensagem automática X dias antes de acabar","Link de compra com o mesmo pedido anterior","Oferta de assinatura para quem recompra sempre","Relatório de faturamento gerado pela recompra"],
+  ai:"Aprende o ciclo real de cada cliente e ajusta o dia do lembrete.",c:"CRM · WhatsApp · loja online"},
+ {id:"fidelidade",g:"crescer",ic:"⭐",n:"Clube, cashback & assinaturas",d:"Faz a cliente voltar sempre: cashback, pontos, clube e cestas por assinatura.",
+  k:[["2.140","no clube"],["R$ 6.300","cashback ativo"],["86","assinaturas"],["R$ 9.460","receita recorrente"]],
+  f:["Cashback configurável por produto, categoria ou canal","Clube com preço de membro","Assinatura mensal (ex.: kit café da manhã, suplementos do mês)","Cobrança recorrente automática","Saldo de cashback visível no caixa, site e WhatsApp"],
+  ai:"Sugere a assinatura certa para quem compra os mesmos itens todo mês.",c:"Asaas recorrência · PDV · loja online"},
+ {id:"parceiros",g:"crescer",ic:"🤝",n:"Parceiros: nutris & personais",d:"Nutricionistas e personal trainers indicam a loja com cupom próprio e ganham comissão sobre as vendas.",new:true,
+  k:[["24","parceiros ativos"],["R$ 11 mil","vendido por indicação"],["R$ 880","comissões no mês"],["310","clientes indicados"]],
+  f:["Cadastro do parceiro com cupom e link exclusivo","Comissão por venda, configurável por categoria","Painel do parceiro com vendas e comissão do mês","Prescrição: a nutri envia a lista de produtos e a cliente compra com um clique","Ranking dos parceiros que mais vendem","Pagamento das comissões lançado no financeiro"],
+  ai:"Indica quais parceiros estão trazendo clientes que mais recompram.",c:"CRM · loja online · WhatsApp · financeiro"},
+ {id:"montador",g:"crescer",ic:"🥗",n:"Montador de kit por objetivo",d:"A cliente diz o objetivo e a IA monta a cesta com os produtos da loja.",new:true,
+  k:[["5","objetivos prontos"],["R$ 186","ticket do kit"],["38%","viram compra"],["3 canais","site, Whats e totem"]],
+  f:["Objetivos: ganho de massa, emagrecimento, low carb, vegano, sem glúten","Perguntas rápidas (rotina, treino, restrições) e kit sugerido","Só sugere produto que tem em estoque","Kit vira carrinho no site, no WhatsApp ou no totem","Opção de transformar o kit em assinatura mensal"],
+  ai:"Monta o kit com os produtos certos e o preço que cabe no bolso da cliente; não substitui orientação da nutricionista.",c:"Catálogo · estoque · loja online · WhatsApp"},
+ {id:"marketing",g:"crescer",ic:"📣",n:"Campanhas & Marketing",d:"Campanhas, cupons e anúncios ligados às vendas de verdade.",
+  k:[["4","campanhas ativas"],["R$ 2.300","investido em anúncios"],["5,4x","retorno"],["12","cupons ativos"]],
+  f:["Calendário de campanhas (Black Friday, janeiro fitness, Dia das Mães)","Disparos segmentados no WhatsApp e e-mail","Cupons por canal, cliente ou produto","Rastreio de leads e vendas vindas do Meta Ads e Google Ads","Banco de criativos (vídeos, carrosséis)","Resultado de cada campanha em vendas"],
+  ai:"Sugere o público e o produto de cada campanha e escreve a mensagem.",c:"Meta Ads · Google Ads · WhatsApp"},
+ {id:"preco",g:"crescer",ic:"🏷️",n:"Preços & Promoções",d:"Preço e margem de cada produto em cada canal, e promoções programadas.",
+  k:[["120","produtos com preço de membro"],["32%","margem média"],["14","abaixo da margem mínima"],["6","promoções no ar"]],
+  f:["Duas tabelas de preço: membro (quem tem o app ou cadastro) e não membro","Escolha dos produtos com preço de membro e da diferença (R$ ou %)","Etiqueta da gôndola com os dois preços (\"R$ 189 · membro R$ 169\")","Formação de preço por markup ou margem desejada","Preço por canal com taxas e frete embutidos","Promoções com data de início e fim","Leve 3 pague 2, combos e preço por quantidade","Alerta de produto vendendo abaixo da margem mínima","Atualização em massa de preços"],
+  ai:"Sugere em quais produtos o preço de membro mais atrai instalações sem derrubar a margem, e mede o resultado.",c:"Todos os canais"},
+ {id:"financeiro",g:"gerir",ic:"💰",n:"Financeiro",d:"Contas a pagar e receber, caixa, conciliação e quanto cada canal realmente deixa de lucro.",
+  k:[["R$ 54 mil","saldo projetado"],["R$ 12 mil","a receber de marketplaces"],["R$ 41 mil","a pagar"],["18%","lucro líquido"]],
+  f:["Contas a pagar e receber","Fluxo de caixa diário e projetado","Conciliação bancária, de cartão e de repasses dos marketplaces","Taxas de cartão e de marketplace lançadas automaticamente","DRE geral e por canal","Centro de custo e plano de contas"],
+  ai:"Prevê o caixa das próximas semanas e avisa antes de faltar dinheiro.",c:"Asaas · bancos · marketplaces"},
+ {id:"fiscal",g:"gerir",ic:"🧮",n:"Fiscal",d:"Notas de saída e entrada sem retrabalho.",
+  k:[["412","NFC-e no mês"],["86","NF-e no mês"],["0","rejeitadas"],["38","XMLs de entrada"]],
+  f:["NFC-e no balcão e NF-e nas vendas online e marketplaces","Entrada de notas de compra por XML","Regras de tributação por produto (Simples Nacional)","Cancelamento, carta de correção e inutilização","Envio dos XMLs para a contabilidade"],
+  ai:"Confere NCM e tributação do cadastro e aponta erros antes da nota ser rejeitada.",c:"Focus NFe"},
+ {id:"relatorios",g:"gerir",ic:"📈",n:"Relatórios & BI",d:"Os números da loja de todos os ângulos, para decidir com dados.",
+  k:[["40+","relatórios prontos"],["6","canais comparados"],["12m","histórico"],["CSV / PDF","exportação"]],
+  f:["Vendas por canal, produto, categoria, vendedora e horário","Comparativo mês a mês e ano a ano","Margem e lucro por produto e canal","Clientes novos x recorrentes","Desempenho de campanhas e cupons","Exportação para Excel e PDF"],
+  ai:"Pergunte em português: \"quanto vendi de whey na Shopee em outubro?\" e a IA responde com o número e o gráfico.",c:"Lê de todas as abas"},
+ {id:"equipe",g:"gerir",ic:"🎯",n:"Quadro de gestão & metas",d:"Onde a gestora define as metas, acompanha cada equipe e cobra o plano de ação.",new:true,
+  k:[["R$ 140 mil","meta do mês"],["87%","no ritmo"],["3 de 5","batendo meta"],["9","ações abertas"]],
+  f:["Metas de faturamento, ticket médio, itens por venda, conversão da loja, clientes novos, apps instalados, assinaturas e perda de insumos","Metas por loja, canal, equipe (caixa, preparo, online), turno, vendedora, categoria e produto","Meta do mês dividida em semanas e dias, com ajuste automático conforme o resultado","Semáforo verde, amarelo e vermelho e ranking da equipe","Comissão e bônus calculados por meta batida","Quadro de tarefas e plano de ação (a fazer, fazendo, feito) com responsável e prazo","Checklist de abertura e fechamento da loja"],
+  ai:"Diz quanto precisa vender por dia para fechar o mês e sugere ações quando uma meta fica vermelha.",c:"PDV · app · câmeras · insumos · financeiro"},
+ {id:"cameras",g:"gerir",ic:"🎥",n:"Câmeras com IA",d:"A IA conta quem entra na loja e cruza com as vendas: mostra a taxa de conversão real do balcão.",new:true,
+  k:[["412","pessoas entraram hoje"],["31%","conversão da loja"],["17h–19h","pico do dia"],["4 min","tempo médio na loja"]],
+  f:["Contagem de entradas por hora, dia e semana","Conversão = vendas no caixa ÷ pessoas que entraram","Horários de pico x número de pessoas na escala","Mapa de calor: áreas e gôndolas mais visitadas","Fila no caixa e no balcão de preparo, com alerta","Contagem anônima, sem reconhecimento facial (LGPD)","Usa as câmeras Intelbras da loja: lê a contagem da própria câmera (modelos com IA) ou analisa a imagem do gravador num mini PC na loja"],
+  ai:"Aponta oportunidade perdida: horário com muita gente entrando e pouca venda, e a gôndola que atrai mas não vende.",c:"Câmeras Intelbras · gravador (DVR/NVR) · PDV · quadro de metas"},
+ {id:"tv",g:"gerir",ic:"📺",n:"Painel da TV",d:"Dashboard em tela cheia que abre sozinho quando a TV liga e se atualiza ao vivo.",new:true,
+  k:[["Ao vivo","atualiza sozinho"],["5","telas em rodízio"],["0 cliques","abre ao ligar"],["2","modos: equipe e cliente"]],
+  f:["Modo equipe: venda do dia x meta, ranking, conversão da loja, pedidos do iFood e do site","Modo cliente: ofertas de membro, QR para baixar o app e shake do dia","Rodízio automático entre as telas","Link fixo com acesso só de visualização, sem login na TV","Funciona em smart TV, TV box ou mini PC ligado na TV","Comemoração na tela quando bate a meta do dia"],
+  ai:"Mostra na hora a frase do dia para a equipe: quanto falta e o que vender.",c:"Painel geral · metas · câmeras · pedidos"},
+ {id:"config",g:"gerir",ic:"⚙️",n:"Configurações",d:"Lojas, usuários, permissões e integrações.",
+  k:[["1","loja"],["5","usuários"],["11","integrações"],["Diário","backup"]],
+  f:["Loja e depósito (estrutura pronta caso abra outra unidade no futuro)","Usuários e permissões por perfil","Conexão com marketplaces, WhatsApp, Focus NFe e Asaas","Formas de pagamento e taxas","Registro de tudo o que cada usuário fez"],
+  ai:"Assistente de configuração que guia a ligação de cada integração.",c:"Administração"}
+];
+
+const side=document.getElementById('side'), pick=document.getElementById('pick'), screen=document.getElementById('screen'), groups=document.getElementById('groups');
+let html='<div class="logo"><span class="dot"></span>Mercearia Saudável</div>', opts='', gh='', i=0;
+for(const gk of Object.keys(G)){
+  const items=T.filter(t=>t.g===gk);
+  html+=`<div class="grp">${G[gk].nome}</div>`;
+  opts+=`<optgroup label="${G[gk].nome}">`;
+  gh+=`<div class="gcard" style="border-top:5px solid ${G[gk].cor}"><h3>${G[gk].nome}</h3><p>${G[gk].desc}</p><ol>`;
+  for(const t of items){
+    i++; t.num=i;
+    html+=`<button class="tab" data-id="${t.id}"><span class="n">${String(i).padStart(2,'0')}</span>${t.ic} ${t.n}${t.new?'<span class="new">IA</span>':''}</button>`;
+    opts+=`<option value="${t.id}">${String(i).padStart(2,'0')} · ${t.n}</option>`;
+    gh+=`<li data-go="${t.id}">${t.n}</li>`;
+  }
+  opts+='</optgroup>'; gh+='</ol></div>';
+}
+side.innerHTML=html; pick.innerHTML=opts; groups.innerHTML=gh;
+
+function show(id){
+  const t=T.find(x=>x.id===id); const g=G[t.g];
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
+  pick.value=id;
+  screen.innerHTML=`
+   <div class="mhead"><div><div class="eyebrow" style="color:${g.tx}">Aba ${String(t.num).padStart(2,'0')} · ${g.nome}</div><h3>${t.ic} ${t.n}</h3><p>${t.d}</p></div>
+   <span class="badge" style="background:${g.bg};color:${g.tx}">${g.nome}</span></div>
+   <div class="mk">${t.k.map(k=>`<div><b>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>
+   <div class="cols">
+     <div class="feat"><h4>O que tem nesta aba</h4><ul>${t.f.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+     <div><div class="ai"><h4>✦ Inteligência artificial</h4><p>${t.ai}</p><span class="chip">Claude IA</span><span class="chip">Automático</span></div>
+     <div class="conn"><b>Conecta com:</b> ${t.c}</div>
+     <div class="conn" style="font-size:12px;margin-top:10px">Números ilustrativos, só para mostrar o tipo de indicador da tela.</div></div>
+   </div>`;
+}
+side.addEventListener('click',e=>{const b=e.target.closest('.tab'); if(b) show(b.dataset.id)});
+pick.addEventListener('change',e=>show(e.target.value));
+groups.addEventListener('click',e=>{const li=e.target.closest('[data-go]'); if(li){show(li.dataset.go); document.getElementById('sistema').scrollIntoView({behavior:'smooth'});}});
+show('painel');
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+# Publicação do Mercearia em programaseven.wideic.com, na VPS que já roda o Soul ERP.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Este arquivo NÃO tem proxy próprio: as portas 80/443 da VPS são do Caddy do
+# Soul ERP. O contêiner `mercearia-app` entra na rede do Soul e o Caddy de lá
+# encaminha programaseven.wideic.com para ele (ver DEPLOY.md, passo 6).
+# O banco do Mercearia é separado do banco do Soul e só existe na rede interna.
+
+services:
+  mercearia-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mercearia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mercearia}
+    volumes:
+      - mercearia_pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mercearia} -d ${POSTGRES_DB:-mercearia}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 768m
+    networks: [interna]
+
+  mercearia-app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mercearia-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mercearia}:${POSTGRES_PASSWORD}@mercearia-db:5432/${POSTGRES_DB:-mercearia}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env (openssl rand -hex 32)}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-12h}
+      # Isolamento por organização no banco (RLS). Para voltar atrás sem deploy: DB_ISOLATION=off no .env.
+      DB_ISOLATION: ${DB_ISOLATION:-on}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      APP_VERSION: ${APP_VERSION:-fase-5b}
+      # API Consultiva do ssÓtica (carga de clientes). Token em Cadastro › Usuários no ssÓtica.
+      SSOTICA_TOKEN: ${SSOTICA_TOKEN:-}
+      SSOTICA_CNPJ: ${SSOTICA_CNPJ:-}
+      SSOTICA_EMPRESA: ${SSOTICA_EMPRESA:-}
+      WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_ENV: ${ASAAS_ENV:-sandbox}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      PORT: 3000
+    expose:
+      - "3000"
+    mem_limit: 768m
+    networks: [interna, soul]
+
+volumes:
+  mercearia_pgdata:
+
+networks:
+  interna:
+  # Rede do Soul ERP, onde está o Caddy. Confira o nome com: docker network ls
+  soul:
+    external: true
+    name: ${SOUL_NETWORK:-erp_default}

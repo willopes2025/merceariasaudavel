@@ -1,0 +1,683 @@
+// Mercearia Saudável — modelo de dados (Fase 1: loja física).
+//
+// Mesma base do Soul ERP e do VISIO:
+//   - tenant_id em toda tabela de negócio (isolamento por organização, com RLS);
+//   - dinheiro em Decimal(12,2), somado em centavos no código;
+//   - quantidade em Decimal(14,3): produto a granel é vendido em kg (0,350 kg);
+//   - nomes em snake_case no banco, camelCase no código.
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- estrutura
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  /// active | suspended
+  status    String   @default("active")
+  timezone  String   @default("America/Sao_Paulo")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stores         Store[]
+  users          AppUser[]
+  roles          Role[]
+  audit          AuditLog[]
+  settings       TenantSetting?
+  customers      Customer[]
+  categories     ProductCategory[]
+  products       Product[]
+  paymentMethods PaymentMethod[]
+  cashSessions   CashSession[]
+  sales          Sale[]
+  goals          Goal[]
+  tvScreens      TvScreen[]
+
+  @@map("tenant")
+}
+
+/// Regras comerciais da organização (cashback, nome do clube).
+model TenantSetting {
+  tenantId String @id @map("tenant_id")
+  /// % do valor pago que volta como cashback para o membro (0 = desligado).
+  cashbackPct      Decimal  @default(0) @map("cashback_pct") @db.Decimal(5, 2)
+  /// Dias para o cashback vencer (0 = não vence).
+  cashbackDays     Int      @default(0) @map("cashback_days")
+  /// Até quanto % da compra pode ser paga com cashback.
+  cashbackMaxUsePct Decimal @default(100) @map("cashback_max_use_pct") @db.Decimal(5, 2)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_setting")
+}
+
+/// Loja física: tem estoque, caixa e equipe próprios.
+model Store {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  code      String
+  name      String
+  cnpj      String?  @db.Char(14)
+  phone     String?
+  address   String?
+  active    Boolean  @default(true)
+  /// Loja que guarda o estoque desta. Vazio = estoque próprio.
+  stockStoreId String? @map("stock_store_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  userStores   UserStore[]
+  customers    Customer[]
+  cashSessions CashSession[]
+  sales        Sale[]
+
+  @@unique([tenantId, code])
+  @@map("store")
+}
+
+model AppUser {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  name         String
+  email        String
+  passwordHash String    @map("password_hash")
+  whatsapp     String?
+  status       String    @default("active")
+  roleId       String?   @map("role_id")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id])
+  role   Role?       @relation(fields: [roleId], references: [id])
+  stores UserStore[]
+  sales  Sale[]      @relation("SaleSeller")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("app_user")
+}
+
+/// Papel (perfil de acesso). tenant_id nulo = papel padrão do sistema.
+model Role {
+  id          String   @id @default(uuid())
+  tenantId    String?  @map("tenant_id")
+  code        String
+  name        String
+  description String?
+  permissions String[]
+
+  tenant Tenant?   @relation(fields: [tenantId], references: [id])
+  users  AppUser[]
+
+  @@unique([tenantId, code])
+  @@map("role")
+}
+
+/// Lojas em que a pessoa trabalha. Sem linha nenhuma = todas as lojas.
+model UserStore {
+  tenantId String @map("tenant_id")
+  userId   String @map("user_id")
+  storeId  String @map("store_id")
+
+  user  AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, storeId])
+  @@map("user_store")
+}
+
+/// Quem mudou o quê. Só acrescenta: nem a aplicação apaga ou altera.
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, entity, entityId])
+  @@map("audit_log")
+}
+
+/// Contador por organização (número da venda sem buraco nem repetição).
+model TenantSequence {
+  tenantId String @map("tenant_id")
+  name     String
+  value    Int    @default(0)
+
+  @@id([tenantId, name])
+  @@map("tenant_sequence")
+}
+
+// ---------------------------------------------------------------- clientes
+
+/// Cliente da loja. Membro = cadastrado no clube (hoje na loja; depois pelo app):
+/// paga o preço de membro e junta cashback.
+model Customer {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  name          String
+  document      String?
+  birthDate     DateTime? @map("birth_date") @db.Date
+  phone         String?
+  email         String?
+  allowWhatsapp Boolean   @default(true) @map("allow_whatsapp")
+  /// Objetivo declarado (massa, emagrecer, low carb, vegano…), para o atendimento.
+  goal          String?
+  isMember      Boolean   @default(false) @map("is_member")
+  memberSince   DateTime? @map("member_since")
+  /// Por onde virou membro: loja | app.
+  memberSource  String?   @map("member_source")
+  cashbackBalance Decimal @default(0) @map("cashback_balance") @db.Decimal(12, 2)
+  storeId       String?   @map("store_id")
+  notes         String?
+  active        Boolean   @default(true)
+  searchText    String    @default("") @map("search_text")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  store    Store?          @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  sales    Sale[]
+  cashback CashbackEntry[]
+
+  @@unique([tenantId, document])
+  @@index([tenantId, phone])
+  @@index([tenantId, active, name])
+  @@map("customer")
+}
+
+/// Extrato de cashback do cliente. Só inserção; o saldo do cliente é a soma.
+model CashbackEntry {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  customerId   String    @map("customer_id")
+  /// credito (ganhou na compra) | uso (pagou com ele) | estorno (venda cancelada) | vencido | ajuste
+  type         String
+  amount       Decimal   @db.Decimal(12, 2)
+  balanceAfter Decimal   @map("balance_after") @db.Decimal(12, 2)
+  saleId       String?   @map("sale_id")
+  expiresAt    DateTime? @map("expires_at") @db.Date
+  note         String?
+  userId       String?   @map("user_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@map("cashback_entry")
+}
+
+// ---------------------------------------------------------------- produtos
+
+model ProductCategory {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  name     String
+  active   Boolean @default(true)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  products Product[]
+
+  @@unique([tenantId, name])
+  @@map("product_category")
+}
+
+/// Produto. kind:
+///   revenda   — comprado pronto e vendido (whey, garrafa Pacco, barrinha, granel);
+///   insumo    — usado no preparo (leite, fruta, base de sorvete, copo, tampa); pode ser vendido ou não;
+///   preparado — feito na loja (shake, sorvete, açaí): não tem estoque próprio,
+///               a venda baixa os insumos da ficha técnica.
+model Product {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  kind        String   @default("revenda")
+  categoryId  String?  @map("category_id")
+  brand       String?
+  /// Código interno.
+  sku         String?
+  /// Código de barras (EAN) — o leitor do caixa busca por ele.
+  barcode     String?
+  /// UN | KG | G | L | ML | CX | PCT
+  unit        String   @default("UN")
+  /// Vendido por peso na balança (quantidade decimal em kg).
+  soldByWeight Boolean @default(false) @map("sold_by_weight")
+  price       Decimal  @default(0) @db.Decimal(12, 2)
+  /// Preço para membro do clube. Vazio = mesmo preço para todos.
+  memberPrice Decimal? @map("member_price") @db.Decimal(12, 2)
+  cost        Decimal  @default(0) @db.Decimal(12, 4)
+  trackStock  Boolean  @default(true) @map("track_stock")
+  /// Controla lote e validade (sai primeiro o que vence primeiro).
+  trackLots   Boolean  @default(false) @map("track_lots")
+  /// Alerta de estoque baixo.
+  minStock    Decimal  @default(0) @map("min_stock") @db.Decimal(14, 3)
+  /// Insumo que também aparece no caixa para venda avulsa.
+  sellable    Boolean  @default(true)
+  ncm         String?
+  cest        String?
+  supplier    String?
+  active      Boolean  @default(true)
+  searchText  String   @default("") @map("search_text")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  category ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  balances StockBalance[]
+  lots     StockLot[]
+  recipe   RecipeItem[]     @relation("RecipeOf")
+  usedIn   RecipeItem[]     @relation("RecipeIngredient")
+
+  @@unique([tenantId, sku])
+  @@unique([tenantId, barcode])
+  @@index([tenantId, active, name])
+  @@map("product")
+}
+
+/// Ficha técnica: quanto de cada insumo vai em uma unidade do preparado.
+model RecipeItem {
+  id           String  @id @default(uuid())
+  tenantId     String  @map("tenant_id")
+  productId    String  @map("product_id")
+  ingredientId String  @map("ingredient_id")
+  /// Na unidade do insumo (30 g de whey = 0,030 se o whey é controlado em KG).
+  quantity     Decimal @db.Decimal(14, 4)
+
+  product    Product @relation("RecipeOf", fields: [productId], references: [id], onDelete: Cascade)
+  ingredient Product @relation("RecipeIngredient", fields: [ingredientId], references: [id])
+
+  @@unique([productId, ingredientId])
+  @@map("recipe_item")
+}
+
+model StockBalance {
+  tenantId  String  @map("tenant_id")
+  productId String  @map("product_id")
+  storeId   String  @map("store_id")
+  quantity  Decimal @default(0) @db.Decimal(14, 3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([productId, storeId])
+  @@map("stock_balance")
+}
+
+/// Lote com validade. O saldo do lote anda junto com o saldo do produto.
+model StockLot {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  productId String   @map("product_id")
+  storeId   String   @map("store_id")
+  code      String
+  expiresAt DateTime? @map("expires_at") @db.Date
+  quantity  Decimal  @default(0) @db.Decimal(14, 3)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId, code])
+  @@index([tenantId, expiresAt])
+  @@map("stock_lot")
+}
+
+/// Toda mudança de saldo. Só inserção.
+model StockMovement {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  productId    String   @map("product_id")
+  storeId      String   @map("store_id")
+  /// entrada | saida | perda | ajuste | contagem | transferencia | venda | venda_cancelada | consumo | consumo_estorno
+  type         String
+  delta        Decimal  @db.Decimal(14, 3)
+  balanceAfter Decimal  @map("balance_after") @db.Decimal(14, 3)
+  /// Custo unitário no momento (para o valor das perdas).
+  unitCost     Decimal  @default(0) @map("unit_cost") @db.Decimal(12, 4)
+  lotId        String?  @map("lot_id")
+  saleId       String?  @map("sale_id")
+  countId      String?  @map("count_id")
+  /// Motivo da perda: vencido | avaria | preparo | degustacao | furto | outro
+  reason       String?
+  note         String?
+  userId       String   @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([productId, createdAt])
+  @@index([tenantId, type, createdAt])
+  @@index([saleId])
+  @@map("stock_movement")
+}
+
+/// Contagem de estoque (a do fim do dia dos insumos abertos, ou inventário geral).
+model InventoryCount {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  storeId   String   @map("store_id")
+  /// insumos | geral
+  scope     String   @default("insumos")
+  /// Dia a que a contagem se refere (horário de Brasília).
+  day       DateTime @db.Date
+  /// Cada produto: sistema, contado, diferença e valor (custo).
+  lines     Json
+  /// Valor da diferença (negativo = faltou).
+  diffValue Decimal  @default(0) @map("diff_value") @db.Decimal(12, 2)
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, storeId, day])
+  @@map("inventory_count")
+}
+
+// ---------------------------------------------------------------- caixa e venda
+
+model PaymentMethod {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  name     String
+  /// dinheiro | pix | debito | credito | cashback | outro
+  kind     String
+  active   Boolean @default(true)
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
+  movements CashMovement[]
+
+  @@unique([tenantId, name])
+  @@map("payment_method")
+}
+
+model CashSession {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  storeId       String    @map("store_id")
+  /// open | closed
+  status        String    @default("open")
+  openedById    String    @map("opened_by_id")
+  openedAt      DateTime  @default(now()) @map("opened_at")
+  openingAmount Decimal   @map("opening_amount") @db.Decimal(12, 2)
+  closedById    String?   @map("closed_by_id")
+  closedAt      DateTime? @map("closed_at")
+  expectedCash  Decimal?  @map("expected_cash") @db.Decimal(12, 2)
+  countedAmount Decimal?  @map("counted_amount") @db.Decimal(12, 2)
+  difference    Decimal?  @db.Decimal(12, 2)
+  notes         String?
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
+  store     Store          @relation(fields: [storeId], references: [id])
+  movements CashMovement[]
+  sales     Sale[]
+
+  @@index([tenantId, storeId, openedAt])
+  @@map("cash_session")
+}
+
+model CashMovement {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  sessionId  String   @map("session_id")
+  /// recebimento | suprimento | sangria | estorno
+  type       String
+  /// Positivo entra, negativo sai.
+  amount     Decimal  @db.Decimal(12, 2)
+  methodId   String?  @map("method_id")
+  saleId     String?  @map("sale_id")
+  /// Estorno: qual recebimento ele desfaz (um estorno por recebimento).
+  reversesId String?  @unique @map("reverses_id")
+  note       String?
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  session  CashSession    @relation(fields: [sessionId], references: [id])
+  method   PaymentMethod? @relation(fields: [methodId], references: [id])
+  sale     Sale?          @relation(fields: [saleId], references: [id])
+  reverses CashMovement?  @relation("Reversal", fields: [reversesId], references: [id])
+  reversal CashMovement?  @relation("Reversal")
+
+  @@index([sessionId])
+  @@index([saleId])
+  @@map("cash_movement")
+}
+
+/// Venda no balcão (PDV). Total sempre calculado no servidor.
+model Sale {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  number        Int
+  storeId       String    @map("store_id")
+  sessionId     String    @map("session_id")
+  customerId    String?   @map("customer_id")
+  sellerId      String?   @map("seller_id")
+  /// loja | ifood | site | whatsapp | app | marketplace (Fase 2 traz os outros canais)
+  channel       String    @default("loja")
+  /// completed | canceled
+  status        String    @default("completed")
+  /// A venda usou o preço de membro (cliente membro identificado).
+  memberPricing Boolean   @default(false) @map("member_pricing")
+  /// Soma dos itens pelo preço cheio.
+  grossTotal    Decimal   @map("gross_total") @db.Decimal(12, 2)
+  /// Quanto o preço de membro economizou.
+  memberSavings Decimal   @default(0) @map("member_savings") @db.Decimal(12, 2)
+  discount      Decimal   @default(0) @db.Decimal(12, 2)
+  total         Decimal   @db.Decimal(12, 2)
+  cashbackUsed  Decimal   @default(0) @map("cashback_used") @db.Decimal(12, 2)
+  cashbackEarned Decimal  @default(0) @map("cashback_earned") @db.Decimal(12, 2)
+  /// Custo dos produtos e insumos que saíram (para a margem).
+  costTotal     Decimal   @default(0) @map("cost_total") @db.Decimal(12, 2)
+  itemsCount    Decimal   @default(0) @map("items_count") @db.Decimal(14, 3)
+  notes         String?
+  createdById   String    @map("created_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  canceledAt    DateTime? @map("canceled_at")
+  canceledById  String?   @map("canceled_by_id")
+  cancelReason  String?   @map("cancel_reason")
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
+  store     Store          @relation(fields: [storeId], references: [id])
+  session   CashSession    @relation(fields: [sessionId], references: [id])
+  customer  Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  seller    AppUser?       @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  items     SaleItem[]
+  payments  CashMovement[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, storeId, createdAt])
+  @@index([customerId])
+  @@map("sale")
+}
+
+model SaleItem {
+  id           String  @id @default(uuid())
+  tenantId     String  @map("tenant_id")
+  saleId       String  @map("sale_id")
+  position     Int
+  productId    String  @map("product_id")
+  description  String
+  /// Snapshot do tipo do produto (preparado baixa insumos).
+  kind         String
+  categoryId   String? @map("category_id")
+  unit         String
+  quantity     Decimal @db.Decimal(14, 3)
+  /// Preço cheio da tabela no momento.
+  listPrice    Decimal @map("list_price") @db.Decimal(12, 2)
+  /// Preço cobrado (membro ou cheio).
+  unitPrice    Decimal @map("unit_price") @db.Decimal(12, 2)
+  discount     Decimal @default(0) @db.Decimal(12, 2)
+  total        Decimal @db.Decimal(12, 2)
+  unitCost     Decimal @default(0) @map("unit_cost") @db.Decimal(12, 4)
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([tenantId, productId])
+  @@map("sale_item")
+}
+
+// ---------------------------------------------------------------- gestão
+
+/// Meta. scope: loja | vendedor | categoria | produto. metric:
+///   faturamento (R$) | ticket (R$ médio) | vendas (quantidade) | itens_por_venda |
+///   novos_membros | perda_insumos (% máximo)
+model Goal {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  metric    String
+  scope     String   @default("loja")
+  storeId   String?  @map("store_id")
+  /// Vendedor, categoria ou produto, conforme o escopo.
+  refId     String?  @map("ref_id")
+  /// mes | semana | dia
+  period    String   @default("mes")
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  target    Decimal  @db.Decimal(14, 2)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, startDate, endDate])
+  @@map("goal")
+}
+
+/// Tela de TV: link fixo, só leitura, sem login.
+model TvScreen {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  storeId   String   @map("store_id")
+  name      String
+  /// equipe (metas e ranking) | cliente (ofertas de membro)
+  mode      String   @default("equipe")
+  /// Segredo do link. Trocar o token derruba o link antigo.
+  token     String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tv_screen")
+}
+
+// ---------------------------------------------------------------- financeiro
+
+model Payable {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  storeId     String?   @map("store_id")
+  description String
+  supplier    String?
+  category    String
+  amount      Decimal   @db.Decimal(12, 2)
+  dueDate     DateTime  @map("due_date") @db.Date
+  /// open | paid | canceled
+  status      String    @default("open")
+  paidDate    DateTime? @map("paid_date") @db.Date
+  note        String?
+  searchText  String    @default("") @map("search_text")
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, status, dueDate])
+  @@map("payable")
+}
+
+// ---------------------------------------------------------------- fiscal
+
+model FiscalConfig {
+  storeId          String   @id @map("store_id")
+  tenantId         String   @map("tenant_id")
+  enabled          Boolean  @default(false)
+  /// Emite a NFC-e sozinha ao finalizar a venda.
+  autoEmit         Boolean  @default(true) @map("auto_emit")
+  /// homologacao | producao
+  environment      String   @default("homologacao")
+  tokenHomologacao String?  @map("token_homologacao")
+  tokenProducao    String?  @map("token_producao")
+  cfop             String   @default("5102")
+  icmsOrigin       String   @default("0") @map("icms_origin")
+  icmsCst          String   @default("102") @map("icms_cst")
+  defaultNcm       String?  @map("default_ncm")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("fiscal_config")
+}
+
+model FiscalDocument {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  storeId          String    @map("store_id")
+  saleId           String    @map("sale_id")
+  /// nfce
+  kind             String    @default("nfce")
+  /// Referência única da nota na Focus NFe.
+  ref              String    @unique
+  environment      String
+  /// processing | authorized | rejected | canceled | error
+  status           String    @default("processing")
+  number           String?
+  series           String?
+  accessKey        String?   @map("access_key")
+  sefazStatus      String?   @map("sefaz_status")
+  message          String?
+  xmlUrl           String?   @map("xml_url")
+  danfeUrl         String?   @map("danfe_url")
+  qrcodeUrl        String?   @map("qrcode_url")
+  total            Decimal   @db.Decimal(12, 2)
+  customerName     String?   @map("customer_name")
+  customerDocument String?   @map("customer_document")
+  payload          Json
+  userId           String    @map("user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  authorizedAt     DateTime? @map("authorized_at")
+  canceledAt       DateTime? @map("canceled_at")
+  cancelReason     String?   @map("cancel_reason")
+  canceledById     String?   @map("canceled_by_id")
+
+  @@index([tenantId, createdAt])
+  @@index([saleId])
+  @@map("fiscal_document")
+}
+
+/// Nota de compra lançada pelo XML.
+model StockEntry {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  storeId          String   @map("store_id")
+  accessKey        String   @map("access_key")
+  number           String
+  series           String?
+  supplierName     String   @map("supplier_name")
+  supplierDocument String   @map("supplier_document")
+  issuedAt         DateTime @map("issued_at") @db.Date
+  total            Decimal  @db.Decimal(12, 2)
+  lines            Json
+  userId           String   @map("user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, accessKey])
+  @@index([tenantId, createdAt])
+  @@map("stock_entry")
+}
+
+/// Código do produto no fornecedor → produto da loja (lembrado para a próxima nota).
+model SupplierProduct {
+  tenantId         String @map("tenant_id")
+  supplierDocument String @map("supplier_document")
+  supplierCode     String @map("supplier_code")
+  productId        String @map("product_id")
+
+  @@id([tenantId, supplierDocument, supplierCode])
+  @@map("supplier_product")
+}

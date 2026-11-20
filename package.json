@@ -1,0 +1,28 @@
+{
+  "name": "mercearia",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mercearia Saudável — sistema da loja: caixa, estoque com lote, clube de membros, shakes e insumos, metas e TV (mesma base do Soul ERP e do VISIO)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:migrate": "npm run db:migrate -w @mercearia/api",
+    "db:deploy": "npm run db:deploy -w @mercearia/api",
+    "db:seed": "npm run db:seed -w @mercearia/api",
+    "e2e": "node scripts/e2e-fase0.mjs && node scripts/e2e-loja.mjs",
+    "dev": "npm run dev -w @mercearia/api & npm run dev -w @mercearia/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19",
+    "vitest": "^3.0.5"
+  }
+}

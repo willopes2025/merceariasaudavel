@@ -1,0 +1,7 @@
+node_modules/
+dist/
+apps/api/public/
+.env
+.env.production
+backups/
+*.log

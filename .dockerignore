@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+apps/api/public
+.env
+.env.*
+!.env.production.example
+backups
+*.log
