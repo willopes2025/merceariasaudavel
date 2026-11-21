@@ -45,6 +45,9 @@ const KitchenBoard = screen(() => import('./screens/orders/KitchenBoard'), (m) =
 const PickupPage = screen(() => import('./shop/PickupPage'), (m) => m.PickupPage);
 const GrowthScreen = screen(() => import('./screens/growth/GrowthScreen'), (m) => m.GrowthScreen);
 const CampaignsScreen = screen(() => import('./screens/growth/CampaignsScreen'), (m) => m.CampaignsScreen);
+const StockIntelScreen = screen(() => import('./screens/purchasing/StockIntelScreen'), (m) => m.StockIntelScreen);
+const SuppliersScreen = screen(() => import('./screens/purchasing/PurchasingScreens'), (m) => m.SuppliersScreen);
+const PurchaseOrdersScreen = screen(() => import('./screens/purchasing/PurchasingScreens'), (m) => m.PurchaseOrdersScreen);
 const AppLinksScreen = screen(() => import('./screens/shop/AppLinksScreen'), (m) => m.AppLinksScreen);
 const PdvScreen = screen(() => import('./screens/pdv/PdvScreen'), (m) => m.PdvScreen);
 const SalesScreen = screen(() => import('./screens/sales/SalesScreen'), (m) => m.SalesScreen);
@@ -132,6 +135,9 @@ export function App() {
             <Route path="preparo" element={<KitchenBoard />} />
             <Route path="recompra" element={<GrowthScreen />} />
             <Route path="campanhas" element={<CampaignsScreen />} />
+            <Route path="inteligencia-estoque" element={<StockIntelScreen />} />
+            <Route path="compras" element={<PurchaseOrdersScreen />} />
+            <Route path="fornecedores" element={<SuppliersScreen />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
             <Route path="validades" element={<ExpiringScreen />} />

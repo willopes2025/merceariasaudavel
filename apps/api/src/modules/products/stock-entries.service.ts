@@ -55,6 +55,7 @@ export class StockEntriesService {
         async (tx) => {
           // A chave única barra a mesma nota duas vezes, mesmo em dois cliques juntos.
           const summary: Prisma.InputJsonValue[] = [];
+          const linkedProducts: string[] = [];
           for (const item of items) {
             const l = lines.get(item.index);
             const source = note.items[item.index]!;
@@ -119,6 +120,7 @@ export class StockEntriesService {
             const key = { tenantId: ctx.tenantId, supplierDocument: note.supplier.document, supplierCode: item.code };
             await tx.supplierProduct.upsert({ where: { tenantId_supplierDocument_supplierCode: key }, create: { ...key, productId: product.id }, update: { productId: product.id } });
             summary.push({ code: item.code, description: item.description, action: l.action, productId: product.id, quantity: item.quantity, unitCost: item.unitCost });
+            linkedProducts.push(product.id);
           }
           if (input.createPayables) {
             for (const [i, d] of note.installments.entries()) {
@@ -128,6 +130,16 @@ export class StockEntriesService {
               });
               result.payables++;
             }
+          }
+          // Fornecedor da nota vira cadastro (pelo CNPJ) e fica como principal de quem ainda não tem.
+          if (note.supplier.document) {
+            const supplier = await tx.supplier.upsert({
+              where: { tenantId_document: { tenantId: ctx.tenantId, document: note.supplier.document } },
+              create: { tenantId: ctx.tenantId, name: note.supplier.name.slice(0, 160), document: note.supplier.document },
+              update: {},
+            });
+            const touched = [...new Set(linkedProducts)];
+            if (touched.length) await tx.product.updateMany({ where: { tenantId: ctx.tenantId, id: { in: touched }, supplierId: null }, data: { supplierId: supplier.id } });
           }
           const entry = await tx.stockEntry.create({
             data: {

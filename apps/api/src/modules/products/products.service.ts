@@ -32,6 +32,7 @@ import { applyStock, currentStock, putStock, q3, stockStoreOf, takeStock } from 
 const include = {
   balances: true,
   category: { select: { name: true } },
+  mainSupplier: { select: { name: true } },
   recipe: { include: { ingredient: { select: { cost: true } } } },
 } satisfies Prisma.ProductInclude;
 type Row = Prisma.ProductGetPayload<{ include: typeof include }>;
@@ -174,6 +175,7 @@ export class ProductsService {
 
   async create(ctx: RequestContext, input: ProductInput): Promise<ProductDetail> {
     await this.assertCategory(ctx, input.categoryId);
+    await this.assertSupplier(ctx, input.supplierId);
     try {
       const row = await this.prisma.product.create({ data: { tenantId: ctx.tenantId, ...this.data(input) } });
       await this.audit.record(ctx, 'product.create', 'product', row.id, { name: row.name, price: input.price, memberPrice: input.memberPrice });
@@ -187,6 +189,7 @@ export class ProductsService {
     const current = await this.prisma.product.findFirst({ where: { id, tenantId: ctx.tenantId } });
     if (!current) throw new NotFoundError('produto', id);
     await this.assertCategory(ctx, input.categoryId);
+    await this.assertSupplier(ctx, input.supplierId);
     if (current.kind !== input.kind && current.kind === 'preparado' && (await this.prisma.recipeItem.count({ where: { productId: id } })))
       throw new DomainError('HAS_RECIPE', 'Esse preparado tem ficha técnica. Apague a ficha antes de mudar o tipo.');
     if (input.kind === 'preparado' && current.kind !== 'preparado' && (await this.prisma.stockBalance.count({ where: { productId: id, quantity: { not: 0 } } })))
@@ -345,12 +348,18 @@ export class ProductsService {
       imageUrl: input.imageUrl,
       showInApp: input.showInApp,
       repurchaseDays: input.repurchaseDays,
+      supplierId: input.supplierId,
+      packSize: input.packSize,
       active: input.active,
       // Sem o campo na requisição, o que está gravado fica.
       ...(input.ncm !== undefined ? { ncm: input.ncm } : {}),
       ...(input.cest !== undefined ? { cest: input.cest } : {}),
       searchText: normalizeText([input.name, input.brand, input.sku, input.barcode].filter(Boolean).join(' ')),
     };
+  }
+
+  private async assertSupplier(ctx: RequestContext, id: string | null) {
+    if (id && !(await this.prisma.supplier.count({ where: { id, tenantId: ctx.tenantId } }))) throw new DomainError('SUPPLIER_NOT_FOUND', 'Fornecedor não encontrado.');
   }
 
   private async assertCategory(ctx: RequestContext, id: string | null) {
@@ -402,6 +411,9 @@ export function toProduct(r: Row, stores: Map<string, string>): Product {
     imageUrl: r.imageUrl,
     showInApp: r.showInApp,
     repurchaseDays: r.repurchaseDays,
+    supplierId: r.supplierId,
+    supplierName: r.mainSupplier?.name ?? null,
+    packSize: Number(r.packSize),
     active: r.active,
     stock,
     totalStock: q3(stock.reduce((s, b) => s + b.quantity, 0)),

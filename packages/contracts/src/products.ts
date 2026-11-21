@@ -108,6 +108,10 @@ export const productSchema = z
       .transform((v) => v || null)
       .refine((v) => v === null || /^https:\/\/\S+$/.test(v), 'A foto precisa ser um link https'),
     showInApp: z.boolean().default(true),
+    /** Fornecedor principal (compra sugerida sai para ele). */
+    supplierId: z.string().uuid().nullish().transform((v) => v ?? null),
+    /** Compra em múltiplos (caixa com 12 → 12). */
+    packSize: z.preprocess((v) => (v === '' || v == null ? 1 : parseNumber(v)), z.number({ invalid_type_error: 'Múltiplo inválido' }).positive('Múltiplo maior que zero').max(10_000)).default(1),
     /** Dura em média (dias): base do aviso de recompra. */
     repurchaseDays: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().int().min(1, 'Mínimo 1 dia').max(365, 'No máximo 365 dias').nullable()).default(null),
     active: z.boolean().default(true),
@@ -150,6 +154,9 @@ export interface Product {
   imageUrl: string | null;
   showInApp: boolean;
   repurchaseDays: number | null;
+  supplierId: string | null;
+  supplierName: string | null;
+  packSize: number;
   active: boolean;
   stock: StockByStore[];
   totalStock: number;

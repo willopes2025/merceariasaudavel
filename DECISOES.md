@@ -54,6 +54,15 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
   sem histórico, a duração do produto. Lista quem vence em até N dias ou atrasou até 45 dias (depois disso é "sumida").
 - WhatsApp por link (wa.me) com a mensagem pronta; o disparo automático entra quando o WhatsApp for integrado.
 
+## Inteligência de estoque (Fase 3b)
+- Saída = venda + consumo do preparo − cancelamentos, no período; por dia = saída ÷ dias.
+- Ponto de pedido = saída/dia × (prazo do fornecedor + 3 dias) + mínimo. Abaixo dele, sugere comprar até
+  saída/dia × (prazo + folga) + mínimo, menos estoque e menos o já pedido (pedidos "enviado"), no múltiplo de compra.
+- Sem fornecedor: prazo padrão 7 dias. Preparado não entra (compra-se o insumo).
+- Curva ABC pelo valor movimentado: faturamento (revenda) ou custo consumido (insumo); A até 80%, B até 95%.
+- Risco de vencer: lotes por validade; o que o ritmo atual não vende até a data conta como risco (lotes até 180 dias).
+- Pedido recebido pode dar entrada no estoque (lote `PC<nº>` quando o produto controla lote) e atualiza o custo.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

@@ -16,6 +16,7 @@ import {
   type ProductDetail,
   type ProductForm,
   type Store,
+  type Supplier,
 } from '@mercearia/contracts';
 import { api, can } from '../../lib/api';
 import { Drawer, Empty, ErrorBox, Field, Loading, PageHeader } from '../../components/ui';
@@ -186,7 +187,7 @@ export function ProductsScreen({ stockView = false }: { stockView?: boolean }) {
   );
 }
 
-const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', description: '', imageUrl: '', showInApp: true, repurchaseDays: null, active: true };
+const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', description: '', imageUrl: '', showInApp: true, repurchaseDays: null, supplierId: null, packSize: 1, active: true };
 
 function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: (p: ProductDetail) => void }) {
   const categories = useCategories();
@@ -277,6 +278,7 @@ function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | n
         <Field label="CEST">
           <input className="input" inputMode="numeric" value={f.cest ?? ''} onChange={(e) => set('cest', e.target.value)} />
         </Field>
+        {f.kind !== 'preparado' && <SupplierFields supplierId={f.supplierId ?? null} packSize={f.packSize} onChange={(supplierId, packSize) => setF((x) => ({ ...x, supplierId, packSize }))} />}
         {f.kind === 'revenda' && (
           <Field label="Dura em média (dias)" hint="Para o aviso de recompra: whey 900 g ≈ 30. Vazio = usa o ritmo de cada cliente.">
             <input className="input" inputMode="numeric" value={f.repurchaseDays == null ? '' : String(f.repurchaseDays)} onChange={(e) => set('repurchaseDays', e.target.value.replace(/\D/g, '') || null)} />
@@ -815,5 +817,27 @@ function OptionsForm({ product, onClose, onDone }: { product: ProductDetail; onC
         </button>
       </div>
     </div>
+  );
+}
+
+/** Fornecedor principal e múltiplo de compra (para a compra sugerida). */
+function SupplierFields({ supplierId, packSize, onChange }: { supplierId: string | null; packSize: unknown; onChange: (supplierId: string | null, packSize: unknown) => void }) {
+  const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: () => api<Supplier[]>('/suppliers') });
+  return (
+    <>
+      <Field label="Fornecedor principal" hint="A compra sugerida sai para ele.">
+        <select className="input" value={supplierId ?? ''} onChange={(e) => onChange(e.target.value || null, packSize)}>
+          <option value="">Nenhum</option>
+          {(suppliers.data ?? []).filter((s) => s.active || s.id === supplierId).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Compra em múltiplos de" hint="Caixa com 12 → 12. A sugestão arredonda para cima.">
+        <input className="input" inputMode="decimal" value={packSize == null ? '' : String(packSize).replace('.', ',')} onChange={(e) => onChange(supplierId, e.target.value)} />
+      </Field>
+    </>
   );
 }

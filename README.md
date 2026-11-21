@@ -92,3 +92,19 @@ Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
   turbinado (+% em tudo, categorias ou produtos) e oferta (preço promocional).
   Período e dias da semana. Caixa, app e totem aplicam sozinhos; o caixa sugere
   o cupom do aniversariante. Cada campanha mostra vendas, faturamento e desconto.
+
+## Fase 3b — inteligência de estoque e compras
+
+- **Inteligência de estoque** (Operar): por loja, com o ritmo dos últimos 30 a 180 dias.
+  - Curva ABC.
+  - Saída por dia (venda + consumo do preparo).
+  - Quantos dias o estoque dura e o giro por ano.
+  - Situação: em falta, comprar agora, comprar em breve, parado, estoque demais.
+  - Dinheiro parado e risco de vencer antes de vender.
+- **Compra sugerida:** cobre o prazo do fornecedor, a folga escolhida e o
+  estoque mínimo. Desconta o que já foi pedido e arredonda para o múltiplo de
+  compra (caixa com 12). Sai agrupada por fornecedor e vira pedido com um clique.
+- **Pedidos de compra:** rascunho → enviado (pelo WhatsApp do fornecedor, com o
+  texto pronto) → recebido (pode dar entrada no estoque com os custos do pedido).
+- **Fornecedores:** prazo de entrega, WhatsApp e pedido mínimo. Fornecedor de
+  nota de entrada (XML) vira cadastro sozinho e fica como principal dos produtos da nota.

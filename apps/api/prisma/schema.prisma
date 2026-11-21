@@ -293,6 +293,10 @@ model Product {
   showInApp   Boolean  @default(true) @map("show_in_app")
   /// Dura em média (dias): base do aviso de recompra (whey 900 g ≈ 30).
   repurchaseDays Int?  @map("repurchase_days")
+  /// Fornecedor principal (compra sugerida sai para ele).
+  supplierId  String?  @map("supplier_id")
+  /// Compra em múltiplos (caixa com 12 → 12). A sugestão arredonda para cima.
+  packSize    Decimal  @default(1) @map("pack_size") @db.Decimal(14, 3)
   active      Boolean  @default(true)
   searchText  String   @default("") @map("search_text")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -305,6 +309,7 @@ model Product {
   recipe   RecipeItem[]     @relation("RecipeOf")
   usedIn   RecipeItem[]     @relation("RecipeIngredient")
   optionGroups OptionGroup[]
+  mainSupplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   optionSupplies ProductOption[] @relation("OptionSupply")
 
   @@unique([tenantId, sku])
@@ -895,4 +900,59 @@ model CustomerContact {
 
   @@index([tenantId, customerId, kind, createdAt])
   @@map("customer_contact")
+}
+
+/// Fornecedor: prazo de entrega e contato para o pedido de compra.
+model Supplier {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  name         String
+  /// CNPJ/CPF (liga com a nota de entrada).
+  document     String?
+  phone        String?
+  email        String?
+  contactName  String?  @map("contact_name")
+  /// Dias entre pedir e chegar.
+  leadTimeDays Int      @default(7) @map("lead_time_days")
+  /// Pedido mínimo em R$.
+  minOrder     Decimal  @default(0) @map("min_order") @db.Decimal(12, 2)
+  notes        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  products Product[]
+  orders   PurchaseOrder[]
+
+  @@unique([tenantId, document])
+  @@index([tenantId, active, name])
+  @@map("supplier")
+}
+
+/// Pedido de compra ao fornecedor: rascunho → enviado → recebido (ou cancelado).
+model PurchaseOrder {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  storeId     String    @map("store_id")
+  number      Int
+  supplierId  String    @map("supplier_id")
+  /// rascunho | enviado | recebido | cancelado
+  status      String    @default("rascunho")
+  /// [{ productId, name, unit, quantity, unitCost }]
+  items       Json
+  total       Decimal   @default(0) @db.Decimal(12, 2)
+  notes       String?
+  expectedOn  DateTime? @map("expected_on") @db.Date
+  sentAt      DateTime? @map("sent_at")
+  receivedAt  DateTime? @map("received_at")
+  canceledAt  DateTime? @map("canceled_at")
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, supplierId])
+  @@map("purchase_order")
 }
