@@ -101,6 +101,11 @@ export interface Customer {
   memberSince: string | null;
   memberSource: 'loja' | 'app' | null;
   cashbackBalance: number;
+  /** Código do cartão de membro (o caixa busca por ele). */
+  memberCode: string | null;
+  /** Acesso ao app: sem acesso, com código provisório ou ativo. */
+  appAccess: 'nenhum' | 'provisorio' | 'ativo';
+  appLastLoginAt: string | null;
   notes: string | null;
   active: boolean;
   createdAt: string;

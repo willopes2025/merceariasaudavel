@@ -231,3 +231,4 @@ export interface Features {
   /** Há canal de WhatsApp conectado? Sem ele nada é enviado. */
   whatsapp: boolean;
 }
+export * from './shop';

@@ -185,7 +185,7 @@ export function ProductsScreen({ stockView = false }: { stockView?: boolean }) {
   );
 }
 
-const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', active: true };
+const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', description: '', imageUrl: '', showInApp: true, active: true };
 
 function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: (p: ProductDetail) => void }) {
   const categories = useCategories();
@@ -276,7 +276,30 @@ function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | n
         <Field label="CEST">
           <input className="input" inputMode="numeric" value={f.cest ?? ''} onChange={(e) => set('cest', e.target.value)} />
         </Field>
+        {f.kind !== 'insumo' && (
+          <>
+            <div className="sm:col-span-2">
+              <Field label="Descrição no app e no cardápio" hint="Uma ou duas frases: sabor, para quem é, o que tem de bom.">
+                <textarea className="input min-h-[64px]" maxLength={400} value={f.description ?? ''} onChange={(e) => set('description', e.target.value)} />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Foto (link https)" hint="Cole o link da imagem (site do fabricante, Drive público…). Vazio = ícone da loja.">
+                <div className="flex gap-3">
+                  <input className="input flex-1" value={f.imageUrl ?? ''} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://…" />
+                  {f.imageUrl && /^https:\/\//.test(f.imageUrl) && <img src={f.imageUrl} alt="" className="h-10 w-10 rounded object-cover" />}
+                </div>
+              </Field>
+            </div>
+          </>
+        )}
         <div className="flex flex-col gap-2 text-sm sm:col-span-2">
+          {f.kind !== 'insumo' && (
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={f.showInApp !== false} onChange={(e) => set('showInApp', e.target.checked)} />
+              Aparece no app e no cardápio
+            </label>
+          )}
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={Boolean(f.soldByWeight)} onChange={(e) => setF((x) => ({ ...x, soldByWeight: e.target.checked, unit: e.target.checked ? 'KG' : x.unit }))} />
             Vendido na balança (granel, por kg)

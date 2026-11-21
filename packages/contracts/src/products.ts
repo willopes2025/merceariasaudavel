@@ -99,6 +99,15 @@ export const productSchema = z
       .nullish()
       .transform((v) => (v === undefined ? undefined : v || null)),
     supplier: optional(150),
+    /** Vitrine do app e do cardápio. */
+    description: optional(400),
+    imageUrl: z
+      .string()
+      .trim()
+      .nullish()
+      .transform((v) => v || null)
+      .refine((v) => v === null || /^https:\/\/\S+$/.test(v), 'A foto precisa ser um link https'),
+    showInApp: z.boolean().default(true),
     active: z.boolean().default(true),
   })
   .refine((p) => p.memberPrice == null || p.memberPrice <= p.price, { path: ['memberPrice'], message: 'O preço de membro tem que ser menor ou igual ao preço normal' })
@@ -135,6 +144,9 @@ export interface Product {
   ncm: string | null;
   cest: string | null;
   supplier: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  showInApp: boolean;
   active: boolean;
   stock: StockByStore[];
   totalStock: number;

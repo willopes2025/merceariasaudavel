@@ -15,6 +15,7 @@ const { SYSTEM_ROLES } = contracts;
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
 const TENANT_NAME = process.env.SEED_TENANT_NAME ?? 'Mercearia Saudável';
+const TENANT_SLUG = process.env.SEED_TENANT_SLUG ?? 'mercearia-saudavel';
 
 const STORES = [{ code: 'loja', name: 'Mercearia Saudável' }];
 
@@ -38,7 +39,11 @@ async function main() {
   }
 
   let tenant = await prisma.tenant.findFirst({ where: { name: TENANT_NAME } });
-  if (!tenant) tenant = await prisma.tenant.create({ data: { name: TENANT_NAME } });
+  if (!tenant) tenant = await prisma.tenant.create({ data: { name: TENANT_NAME, slug: TENANT_SLUG } });
+  // Endereço do app do cliente e do cardápio (/app, /cardapio).
+  if (!tenant.slug && !(await prisma.tenant.findUnique({ where: { slug: TENANT_SLUG } }))) {
+    tenant = await prisma.tenant.update({ where: { id: tenant.id }, data: { slug: TENANT_SLUG } });
+  }
 
   const storeIds = {};
   for (const s of STORES) {

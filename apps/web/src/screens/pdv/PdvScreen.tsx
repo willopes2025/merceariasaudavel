@@ -451,7 +451,7 @@ function CustomerBox({ customer, onChange, wouldSave }: { customer: CustomerOpti
         <QuickMember initialPhone={q} onCancel={() => setCreating(false)} onCreated={(c) => { setCreating(false); onChange(c); }} />
       ) : (
         <>
-          <input className="input" placeholder="Celular, CPF ou nome (opcional)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Cliente" />
+          <input className="input" placeholder="Celular, CPF, cartão do app ou nome" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Cliente" />
           {results.data?.map((c) => (
             <button key={c.id} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50" onClick={() => onChange(c)}>
               <span>

@@ -51,10 +51,14 @@ export class AuthGuard implements CanActivate {
   private async verify(request: Request): Promise<TokenPayload> {
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw new UnauthorizedException('Token ausente');
+    let payload: TokenPayload;
     try {
-      return await this.jwt.verifyAsync<TokenPayload>(header.slice(7));
+      payload = await this.jwt.verifyAsync<TokenPayload>(header.slice(7));
     } catch {
       throw new UnauthorizedException('Token inválido ou expirado');
     }
+    // Token do app do cliente não abre rota da equipe.
+    if (payload.kind || !Array.isArray(payload.permissions)) throw new UnauthorizedException('Token inválido ou expirado');
+    return payload;
   }
 }

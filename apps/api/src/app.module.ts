@@ -18,13 +18,14 @@ import { ManagementModule } from './modules/management/management.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { ProductsModule } from './modules/products/products.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { ShopModule } from './modules/shop/shop.module';
 import { TenancyModule } from './modules/tenancy/tenancy.module';
 
 /**
  * Mercearia Saudável — Fase 1 (loja física): acesso, clientes e clube,
  * produtos e estoque com lote, caixa e venda, nota fiscal, preparo e insumos,
- * financeiro, metas, painel e TV. Fase 2 (app, loja online, marketplaces,
- * iFood) entra como módulos novos aqui.
+ * financeiro, metas, painel e TV. Fase 2a: app do cliente e cardápio (shop).
+ * Loja online, marketplaces e iFood entram como módulos novos aqui.
  */
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     SalesModule,
     KitchenModule,
     ManagementModule,
+    ShopModule,
   ],
   controllers: [HealthController],
   providers: [

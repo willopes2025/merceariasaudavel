@@ -22,8 +22,21 @@ Proposta e arquitetura completa: apresentação "Mercearia Saudável · Arquitet
 - **Gestão**: painel do dia, metas (loja, pessoa, categoria, produto; faturamento,
   ticket, itens por venda, novos membros, perda de insumos), resumo do período,
   tela de TV pública por link.
-- O menu já mostra as abas das Fases 2 e 3 (app, totem, loja online,
+- O menu já mostra as abas das Fases 2 e 3 (totem com pedido, loja online,
   marketplaces, iFood, WhatsApp com IA, recompra, parceiros, câmeras).
+
+## Fase 2a — app do cliente e cardápio
+
+- **App do cliente** em `/app` (PWA instalável no Android e no iPhone): cadastro
+  com nome, celular e PIN de 6 números = entra no clube. Cartão de membro com QR
+  e código de 6 letras, saldo e extrato de cashback, compras, quanto já
+  economizou, ofertas de membro, catálogo e perfil.
+- **Cardápio público** em `/cardapio` (QR da mesa/vitrine) e **modo totem** em
+  `/cardapio?totem=1` (letras grandes, QR para virar membro, volta ao começo sozinho).
+- **Balcão**: o PDV acha o membro pelo código do cartão; na ficha da cliente,
+  "Liberar app" gera um código provisório (primeiro acesso de quem já comprava
+  ou PIN esquecido). Tela **Vender › App e cardápio** com os QR para imprimir.
+- Produto ganhou descrição, foto (link) e "aparece no app".
 
 ## Estrutura
 

@@ -20,6 +20,11 @@ describe('menu da Mercearia', () => {
     expect(activePath('/')).toBe('/');
   });
 
+  it('nenhum item da equipe usa os endereços públicos do cliente', () => {
+    const paths = NAV.flatMap((g) => g.items.map((i) => i.path));
+    expect(paths.filter((p) => p === '/app' || p.startsWith('/app/') || p.startsWith('/cardapio') || p.startsWith('/tv/'))).toEqual([]);
+  });
+
   it('não repete caminho', () => {
     const paths = NAV.flatMap((g) => g.items.map((i) => i.path));
     expect(new Set(paths).size).toBe(paths.length);

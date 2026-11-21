@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import * as argon2 from 'argon2';
 import {
   normalizeText,
   onlyDigits,
@@ -12,7 +13,9 @@ import {
   type CustomerInput,
   type CustomerListQuery,
   type CustomerOption,
+  type AppAccessCode,
   type CustomerRow,
+  MEMBER_CODE_RULE,
   type Page,
   type TimelineItem,
 } from '@mercearia/contracts';
@@ -21,12 +24,15 @@ import { ConflictError, NotFoundError } from '../../common/errors/domain-error';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestContext } from '../../common/tenancy/request-context';
 import { clubRules, moveCashback } from './cashback';
+import { ensureMemberCode, temporaryPin } from './member-code';
 
 const ACTION_LABELS: Record<string, string> = {
   'customer.create': 'Cadastro',
   'customer.update': 'Cadastro alterado',
   'customer.member': 'Entrou no clube',
   'customer.member_left': 'Saiu do clube',
+  'customer.app_access': 'Recebeu código de acesso ao app',
+  'customer.app_signup': 'Entrou no clube pelo app',
   'sale.create': 'Compra',
   'sale.cancel': 'Compra cancelada',
 };
@@ -85,6 +91,8 @@ export class CustomersService {
     if (text.length < 2) return [];
     const digits = onlyDigits(text);
     const or: Prisma.CustomerWhereInput[] = [];
+    const code = text.toUpperCase().replace(/\s/g, '');
+    if (MEMBER_CODE_RULE.test(code)) or.push({ memberCode: code });
     if (digits.length >= 8 && digits.length === text.replace(/[\s().\-/+]/g, '').length) {
       if (digits.length === 11) or.push({ document: digits });
       or.push({ phone: { endsWith: digits.slice(-8) } });
@@ -118,6 +126,7 @@ export class CustomersService {
       SELECT COUNT(*) AS count, SUM(total + cashback_used) AS spent, MAX(created_at) AS last
         FROM sale WHERE tenant_id = ${ctx.tenantId} AND customer_id = ${id} AND status = 'completed'`;
     const s = stats[0]!;
+    const access = await this.prisma.customerAccess.findFirst({ where: { customerId: id, tenantId: ctx.tenantId }, select: { mustChange: true, lastLoginAt: true } });
     const purchases = Number(s.count);
     const spent = Number(s.spent ?? 0);
     return {
@@ -133,6 +142,9 @@ export class CustomersService {
       memberSince: c.memberSince?.toISOString() ?? null,
       memberSource: (c.memberSource as 'loja' | 'app' | null) ?? null,
       cashbackBalance: Number(c.cashbackBalance),
+      memberCode: c.memberCode,
+      appAccess: !access ? 'nenhum' : access.mustChange ? 'provisorio' : 'ativo',
+      appLastLoginAt: access?.lastLoginAt?.toISOString() ?? null,
       notes: c.notes,
       active: c.active,
       createdAt: c.createdAt.toISOString(),
@@ -146,6 +158,7 @@ export class CustomersService {
     const c = await this.prisma.customer.create({
       data: { ...this.data(input), tenantId: ctx.tenantId, ...(input.isMember ? { memberSince: new Date(), memberSource: 'loja' } : {}) },
     });
+    if (input.isMember) await ensureMemberCode(this.prisma, ctx.tenantId, c.id);
     await this.audit.record(ctx, 'customer.create', 'customer', c.id, { name: c.name });
     if (input.isMember) await this.audit.record(ctx, 'customer.member', 'customer', c.id, { source: 'loja' });
     return this.get(ctx, c.id);
@@ -162,10 +175,37 @@ export class CustomersService {
     const joined = input.isMember && !current.isMember;
     const left = !input.isMember && current.isMember;
     await this.prisma.customer.update({ where: { id }, data: { ...data, ...(joined ? { memberSince: new Date(), memberSource: 'loja' } : {}) } });
+    if (input.isMember) await ensureMemberCode(this.prisma, ctx.tenantId, id);
     if (changed.length) await this.audit.record(ctx, 'customer.update', 'customer', id, { fields: changed });
     if (joined) await this.audit.record(ctx, 'customer.member', 'customer', id, { source: 'loja' });
     if (left) await this.audit.record(ctx, 'customer.member_left', 'customer', id, {});
     return this.get(ctx, id);
+  }
+
+  /**
+   * Balcão libera o app: gera um código provisório de 6 números (mostrado uma
+   * vez). No primeiro login o cliente troca pelo próprio PIN. Serve também
+   * para quem esqueceu o PIN. Derruba os logins anteriores.
+   */
+  async appAccess(ctx: RequestContext, id: string): Promise<AppAccessCode> {
+    const c = await this.prisma.customer.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (!c) throw new NotFoundError('cliente', id);
+    if (!c.active) throw new ConflictError('CUSTOMER_INACTIVE', 'Cliente desativada: reative o cadastro antes.');
+    if (!c.phone) throw new ConflictError('PHONE_REQUIRED', 'Cadastre o celular: é com ele que a cliente entra no app.');
+    const code = temporaryPin();
+    const pinHash = await argon2.hash(code);
+    await this.prisma.$transaction(async (tx) => {
+      if (!c.isMember) await tx.customer.update({ where: { id }, data: { isMember: true, memberSince: new Date(), memberSource: 'loja' } });
+      await ensureMemberCode(tx, ctx.tenantId, id);
+      await tx.customerAccess.upsert({
+        where: { customerId: id },
+        create: { customerId: id, tenantId: ctx.tenantId, pinHash, mustChange: true },
+        update: { pinHash, mustChange: true, version: { increment: 1 }, failedCount: 0, lockedUntil: null },
+      });
+    });
+    if (!c.isMember) await this.audit.record(ctx, 'customer.member', 'customer', id, { source: 'loja' });
+    await this.audit.record(ctx, 'customer.app_access', 'customer', id, {});
+    return { code, phone: c.phone };
   }
 
   async cashback(ctx: RequestContext, id: string): Promise<CashbackEntry[]> {

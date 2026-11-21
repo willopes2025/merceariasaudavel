@@ -9,7 +9,19 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Uma loja, equipe pequena. A estrutura aceita outra loja no futuro.
 
 ## Clube e preço de membro
-- Ser membro é **grátis**: basta o cadastro com celular (no caixa hoje; instalando o app na Fase 2).
+- Ser membro é **grátis**: cadastro com celular no caixa ou pelo app (`/app`).
+- Todo membro tem um **código de cartão** de 6 caracteres (sem 0/O/1/I/L), único na loja; o caixa busca por ele.
+
+## App do cliente (Fase 2a)
+- Login do cliente = **celular + PIN de 6 números** (PIN fácil é recusado). Sem SMS/WhatsApp por enquanto:
+  quando o WhatsApp entrar, vira código por WhatsApp para recuperar o PIN.
+- Celular que a loja já conhece só vira conta no app com o **mesmo CPF da ficha**, ou se a ficha está vazia
+  (sem compras e sem cashback). Fora isso, **código provisório do balcão** (gerado na ficha, mostrado uma vez).
+- 5 PINs errados travam o login por 15 min. Trocar o PIN ou gerar código novo **derruba todos os logins**
+  (versão do acesso no token).
+- Token do cliente (`kind: cliente`, 90 dias) não abre rota da equipe, e o da equipe não abre o app.
+- Rotas do app são `/v1/shop/:slug/...`; filtram sempre pela organização do slug ou do token.
+- App das lojas (Play Store / App Store): embrulho (Capacitor/TWA) desta mesma página `/app`, numa etapa seguinte.
 - Membro paga o **preço de membro** dos produtos que têm esse preço; os outros pagam o preço normal.
 - Preço de membro nunca é maior que o preço normal.
 - Cashback: % sobre o que foi **pago** (sem contar o cashback usado), só para membro.

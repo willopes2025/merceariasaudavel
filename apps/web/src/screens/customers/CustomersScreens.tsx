@@ -7,6 +7,7 @@ import {
   customerSchema,
   formatCpf,
   formatPhone,
+  type AppAccessCode,
   type CashbackEntry,
   type Customer,
   type CustomerForm,
@@ -128,7 +129,8 @@ export function CustomerScreen() {
         <div className="card p-4">
           <p className="text-xs text-ink-soft">Clube</p>
           <p className="mt-1 font-semibold">{x.isMember ? `Membro desde ${formatDay(x.memberSince)}` : 'Não é membro'}</p>
-          {x.isMember && <p className="text-xs text-ink-soft">Entrou pela {x.memberSource === 'app' ? 'app' : 'loja'}</p>}
+          {x.isMember && <p className="text-xs text-ink-soft">Entrou pela {x.memberSource === 'app' ? 'app' : 'loja'}{x.memberCode ? ` · cartão ${x.memberCode}` : ''}</p>}
+          <AppAccess customer={x} onChanged={() => client.invalidateQueries({ queryKey: ['customer', id] })} />
         </div>
         <div className="card p-4">
           <p className="text-xs text-ink-soft">Cashback</p>
@@ -286,5 +288,49 @@ function CustomerDrawer({ customer, onClose, onSaved }: { customer: Customer | n
         </button>
       </form>
     </Drawer>
+  );
+}
+
+/**
+ * Acesso ao app: o balcão gera um código provisório de 6 números (primeiro
+ * acesso de quem já era cliente, ou PIN esquecido). Aparece uma vez só.
+ */
+function AppAccess({ customer, onChanged }: { customer: Customer; onChanged: () => void }) {
+  const [code, setCode] = useState<AppAccessCode | null>(null);
+  const m = useMutation({
+    mutationFn: () => api<AppAccessCode>(`/customers/${customer.id}/app-access`, { method: 'POST' }),
+    onSuccess: (r) => {
+      setCode(r);
+      onChanged();
+    },
+  });
+  const label = customer.appAccess === 'ativo' ? 'Usa o app' : customer.appAccess === 'provisorio' ? 'Código entregue, ainda não entrou' : 'Ainda sem app';
+  return (
+    <div className="mt-2 border-t border-slate-100 pt-2">
+      <p className="text-xs text-ink-soft">
+        App: {label}
+        {customer.appLastLoginAt ? ` · último acesso ${formatDay(customer.appLastLoginAt)}` : ''}
+      </p>
+      {can('customer.manage') && customer.phone && (
+        <button className="mt-1 text-xs font-medium text-brand underline disabled:opacity-50" disabled={m.isPending} onClick={() => m.mutate()}>
+          {customer.appAccess === 'nenhum' ? 'Liberar app (gerar código)' : 'Gerar código novo (esqueceu o PIN)'}
+        </button>
+      )}
+      {m.error && <p className="mt-1 text-xs text-red-600">{(m.error as Error).message}</p>}
+      {code && (
+        <Drawer title="Código para entrar no app" onClose={() => setCode(null)}>
+          <div className="space-y-3 text-sm">
+            <p>Passe para a cliente. Vale para o primeiro acesso; no app ela cria o PIN dela.</p>
+            <p className="rounded-lg bg-brand-soft py-4 text-center font-mono text-4xl font-bold tracking-[0.3em] text-brand-dark">{code.code}</p>
+            <ol className="list-decimal space-y-1 pl-5 text-ink-soft">
+              <li>Abrir <b className="text-ink">{window.location.host}/app</b> no celular (ou o QR do balcão).</li>
+              <li>Tocar em <b className="text-ink">Já sou membro</b>.</li>
+              <li>Celular {formatPhone(code.phone)} e este código no lugar do PIN.</li>
+            </ol>
+            <p className="text-xs text-ink-soft">O código some ao fechar esta janela. Os logins antigos dessa cliente foram encerrados.</p>
+          </div>
+        </Drawer>
+      )}
+    </div>
   );
 }

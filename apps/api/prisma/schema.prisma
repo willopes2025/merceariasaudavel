@@ -21,6 +21,8 @@ datasource db {
 model Tenant {
   id        String   @id @default(uuid())
   name      String
+  /// Endereço público do app do cliente e do cardápio (ex.: mercearia-saudavel).
+  slug      String?  @unique
   /// active | suspended
   status    String   @default("active")
   timezone  String   @default("America/Sao_Paulo")
@@ -181,6 +183,8 @@ model Customer {
   /// Por onde virou membro: loja | app.
   memberSource  String?   @map("member_source")
   cashbackBalance Decimal @default(0) @map("cashback_balance") @db.Decimal(12, 2)
+  /// Código do cartão de membro (aparece no app e o caixa busca por ele).
+  memberCode    String?   @map("member_code")
   storeId       String?   @map("store_id")
   notes         String?
   active        Boolean   @default(true)
@@ -192,8 +196,10 @@ model Customer {
   store    Store?          @relation(fields: [storeId], references: [id], onDelete: SetNull)
   sales    Sale[]
   cashback CashbackEntry[]
+  access   CustomerAccess?
 
   @@unique([tenantId, document])
+  @@unique([tenantId, memberCode])
   @@index([tenantId, phone])
   @@index([tenantId, active, name])
   @@map("customer")
@@ -269,6 +275,11 @@ model Product {
   ncm         String?
   cest        String?
   supplier    String?
+  /// Texto curto e foto que aparecem no app e no cardápio.
+  description String?
+  imageUrl    String?  @map("image_url")
+  /// Aparece no app e no cardápio (insumo nunca aparece).
+  showInApp   Boolean  @default(true) @map("show_in_app")
   active      Boolean  @default(true)
   searchText  String   @default("") @map("search_text")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -680,4 +691,25 @@ model SupplierProduct {
 
   @@id([tenantId, supplierDocument, supplierCode])
   @@map("supplier_product")
+}
+
+/// Acesso do cliente ao app: entra com o celular e um PIN de 6 dígitos.
+model CustomerAccess {
+  customerId  String    @id @map("customer_id")
+  tenantId    String    @map("tenant_id")
+  pinHash     String    @map("pin_hash")
+  /// Código provisório dado no balcão: no primeiro login o cliente cria o próprio PIN.
+  mustChange  Boolean   @default(false) @map("must_change")
+  /// Sobe a cada troca de PIN: derruba os logins antigos.
+  version     Int       @default(1)
+  failedCount Int       @default(0) @map("failed_count")
+  lockedUntil DateTime? @map("locked_until")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("customer_access")
 }

@@ -26,7 +26,7 @@ async function bootstrap(): Promise<void> {
 
   const swagger = new DocumentBuilder()
     .setTitle('Mercearia API')
-    .setDescription('ERP de ótica + CRM do grupo Seven')
+    .setDescription('Sistema da Mercearia Saudável: loja, clube e app do cliente')
     .setVersion('0.1')
     .addBearerAuth()
     .build();

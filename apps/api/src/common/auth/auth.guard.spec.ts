@@ -56,6 +56,11 @@ describe('AuthGuard', () => {
     await expect(call('livre', `${t}x`)).rejects.toThrow('Token inválido');
   });
 
+  it('token do app do cliente não abre rota da equipe', async () => {
+    const t = await jwt.signAsync({ sub: 'c1', tenantId: 't1', kind: 'cliente', v: 1 });
+    await expect(call('livre', t)).rejects.toThrow('Token inválido');
+  });
+
   it('a organização do contexto vem do token', async () => {
     const { ctx } = await call('livre', await token([]));
     expect(ctx).toMatchObject({ tenantId: 't1', userId: 'u1' });

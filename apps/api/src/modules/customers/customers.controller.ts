@@ -61,6 +61,13 @@ export class CustomersController {
     return this.customers.update(ctx, id, body);
   }
 
+  /** Código provisório para a cliente entrar no app (primeiro acesso ou PIN esquecido). */
+  @Post('customers/:id/app-access')
+  @RequiresPermission(PERMISSIONS.customerManage)
+  appAccess(@Ctx() ctx: RequestContext, @Param('id', uuid) id: string) {
+    return this.customers.appAccess(ctx, id);
+  }
+
   /** Regras do clube: qualquer pessoa logada lê (o caixa precisa); só configuração altera. */
   @Get('club')
   club(@Ctx() ctx: RequestContext) {

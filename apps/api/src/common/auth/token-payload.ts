@@ -4,6 +4,17 @@ export interface TokenPayload {
   tenantId: string;
   storeIds: string[];
   permissions: string[];
+  /** Token do app do cliente: nunca vale nas rotas da equipe. */
+  kind?: 'cliente';
+}
+
+/** Claims do token do app do cliente. */
+export interface CustomerTokenPayload {
+  sub: string;
+  tenantId: string;
+  kind: 'cliente';
+  /** Versão do acesso: trocar o PIN derruba os tokens antigos. */
+  v: number;
 }
 
 /**
