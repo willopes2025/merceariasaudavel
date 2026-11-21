@@ -27,6 +27,7 @@ import {
 import { LoginThrottle } from '../../common/auth/login-throttle';
 import type { CustomerTokenPayload } from '../../common/auth/token-payload';
 import { ConflictError, DomainError, NotFoundError } from '../../common/errors/domain-error';
+import { PaymentGateway } from '../../common/payments/payment-gateway';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { clubRules } from '../customers/cashback';
 import { ensureMemberCode } from '../customers/member-code';
@@ -76,6 +77,7 @@ export class ShopService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly gateway: PaymentGateway,
   ) {}
 
   // ---------------------------------------------------------------- vitrine
@@ -105,10 +107,11 @@ export class ShopService {
     const t = await this.tenant(slug);
     const [club, settings, zones] = await Promise.all([
       clubRules(this.prisma, t.tenantId),
-      this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true, deliveryEnabled: true, deliveryCity: true } }),
+      this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true, deliveryEnabled: true, deliveryCity: true, onlinePix: true, onlineCard: true, onlineTotem: true } }),
       this.prisma.deliveryZone.findMany({ where: { tenantId: t.tenantId, active: true }, orderBy: { name: 'asc' } }),
     ]);
     const running = await runningCampaigns(this.prisma, t.tenantId);
+    const ready = Boolean(this.gateway.provider);
     const campaigns = running.map((c) => ({ id: c.id, name: c.name, type: c.type as 'cashback' | 'oferta', description: c.description, until: c.endsOn, membersOnly: c.type === 'cashback' || c.audience === 'membros', extraCashbackPct: c.extraCashbackPct }));
     return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club, ordersEnabled: Boolean(t.storeId) && (settings?.ordersEnabled ?? true),
       campaigns,
@@ -117,6 +120,7 @@ export class ShopService {
         city: settings?.deliveryCity ?? null,
         zones: zones.map((z) => ({ id: z.id, name: z.name, fee: Number(z.fee), minOrder: Number(z.minOrder), freeAbove: z.freeAbove == null ? null : Number(z.freeAbove), etaMinutes: z.etaMinutes })),
       },
+      online: { pix: ready && Boolean(settings?.onlinePix), card: ready && Boolean(settings?.onlineCard), totem: ready && Boolean(settings?.onlineTotem) },
     };
   }
 

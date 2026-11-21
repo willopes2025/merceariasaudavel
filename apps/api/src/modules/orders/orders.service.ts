@@ -21,6 +21,8 @@ import {
 } from '@mercearia/contracts';
 import { AuditService } from '../../common/audit.service';
 import { ConflictError, DomainError, NotFoundError } from '../../common/errors/domain-error';
+import { OnlineRefunds } from '../../common/payments/online-refunds.service';
+import { PaymentGateway } from '../../common/payments/payment-gateway';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { canUseStore, type RequestContext } from '../../common/tenancy/request-context';
 import { orderNumber, SalesService } from '../sales/sales.service';
@@ -36,6 +38,7 @@ const include = {
   sale: { select: { number: true, total: true } },
   courier: { select: { id: true, name: true } },
   zone: { select: { name: true } },
+  onlinePayments: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, method: true, status: true, amount: true, settleError: true } },
 } satisfies Prisma.OrderInclude;
 type Row = Prisma.OrderGetPayload<{ include: typeof include }>;
 
@@ -64,6 +67,8 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly sales: SalesService,
     private readonly audit: AuditService,
+    private readonly online: OnlineRefunds,
+    private readonly gateway: PaymentGateway,
   ) {}
 
   // ---------------------------------------------------------------- equipe
@@ -123,6 +128,9 @@ export class OrdersService {
   async cancel(ctx: RequestContext, id: string, reason: string): Promise<Order> {
     const current = await this.get(ctx, id);
     if (current.status !== 'aguardando_pagamento') throw new ConflictError('ORDER_PAID', current.status === 'cancelado' ? 'Esse pedido já está cancelado.' : 'Pedido pago: cancele a venda dele em Vendas.');
+    // Pago pelo app e sem venda (ex.: valor não bateu): devolve antes de cancelar.
+    for (const paid of await this.online.receivedUnsettled(ctx.tenantId, id)) await this.online.refund(ctx.tenantId, paid.id);
+    await this.online.cancelPending(ctx.tenantId, id);
     const changed = await this.prisma.order.updateMany({ where: { id, tenantId: ctx.tenantId, status: 'aguardando_pagamento' }, data: { status: 'cancelado', canceledAt: new Date(), cancelReason: reason } });
     if (!changed.count) throw new ConflictError('ORDER_CHANGED', 'O pedido mudou enquanto isso. Atualize.');
     await this.audit.record(ctx, 'order.cancel', 'order', id, { number: current.number, reason });
@@ -218,6 +226,7 @@ export class OrdersService {
     if (!customer) throw new NotFoundError('cliente');
     const open = await this.prisma.order.count({ where: { tenantId: place.tenantId, customerId, status: 'aguardando_pagamento', createdAt: { gte: this.unpaidLimit() } } });
     if (open >= MAX_PENDING_PER_CUSTOMER) throw new DomainError('TOO_MANY_PENDING', 'Você já tem pedidos esperando pagamento. Pague no caixa ou cancele um antes de fazer outro.');
+    if (input.payOnline) await this.assertOnline(place.tenantId, input.payOnline);
     let delivery: DeliveryPlan | null = null;
     if (input.fulfillment === 'entrega') {
       const settings = await this.prisma.tenantSetting.findUnique({ where: { tenantId: place.tenantId }, select: { deliveryEnabled: true, deliveryCity: true } });
@@ -225,16 +234,17 @@ export class OrdersService {
       const addr = await this.prisma.customerAddress.findFirst({ where: { id: input.addressId!, tenantId: place.tenantId, customerId }, include: { zone: true } });
       if (!addr) throw new NotFoundError('endereço');
       if (!addr.zone.active) throw new DomainError('ZONE_OFF', `Não estamos entregando em ${addr.zone.name} agora. Escolha retirar na loja.`);
-      const pay = input.payOnDelivery!;
+      const pay = input.payOnDelivery ?? 'pix';
       const change = pay === 'dinheiro' && input.changeFor ? `, troco para R$ ${input.changeFor.toFixed(2).replace('.', ',')}` : '';
       delivery = {
         zoneId: addr.zone.id,
         zone: { name: addr.zone.name, fee: Number(addr.zone.fee), minOrder: Number(addr.zone.minOrder), freeAbove: addr.zone.freeAbove == null ? null : Number(addr.zone.freeAbove) },
         address: { street: addr.street, number: addr.number, complement: addr.complement, neighborhood: addr.zone.name, reference: addr.reference, city: settings.deliveryCity },
-        paymentNote: `${PAY_ON_DELIVERY[pay]} na entrega${change}`,
+        // Pago pelo app: o entregador não cobra nada.
+        paymentNote: input.payOnline ? '' : `${PAY_ON_DELIVERY[pay]} na entrega${change}`,
       };
     }
-    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery, input.couponCode);
+    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery, input.couponCode, input.payOnline);
   }
 
   async createFromTotem(place: ShopPlace, input: TotemOrderInput): Promise<Order> {
@@ -262,6 +272,8 @@ export class OrdersService {
   }
 
   async cancelMine(place: ShopPlace, customerId: string, id: string): Promise<Order> {
+    if ((await this.online.receivedUnsettled(place.tenantId, id)).length) throw new ConflictError('ORDER_PAID', 'Esse pedido já foi pago. Fale com o balcão.');
+    await this.online.cancelPending(place.tenantId, id);
     const changed = await this.prisma.order.updateMany({ where: { id, tenantId: place.tenantId, customerId, status: 'aguardando_pagamento' }, data: { status: 'cancelado', canceledAt: new Date(), cancelReason: 'Cancelado pela cliente no app' } });
     if (!changed.count) throw new ConflictError('ORDER_PAID', 'Esse pedido não pode mais ser cancelado pelo app. Fale com o balcão.');
     return this.mineOne(place, customerId, id);
@@ -296,7 +308,7 @@ export class OrdersService {
 
   // ---------------------------------------------------------------- apoio
 
-  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null, couponCode: string | null = null): Promise<Order> {
+  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null, couponCode: string | null = null, payOnline: 'pix' | 'cartao' | null = null): Promise<Order> {
     // Mesma conta do caixa (preço de membro, montagem, regras): erro aqui = erro no caixa.
     let quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode, deliveryFee: 0 });
     // Cupom que não vale avisa já no app (o caixa conferiria de novo).
@@ -325,8 +337,9 @@ export class OrdersService {
           estimate: quote.total,
           notes,
           couponCode: couponCode && !quote.couponError ? couponCode : null,
+          payOnline,
           ...(delivery
-            ? { fulfillment: 'entrega', address: delivery.address as unknown as Prisma.InputJsonValue, zoneId: delivery.zoneId, deliveryFee: fee, paymentNote: delivery.paymentNote }
+            ? { fulfillment: 'entrega', address: delivery.address as unknown as Prisma.InputJsonValue, zoneId: delivery.zoneId, deliveryFee: fee, paymentNote: delivery.paymentNote || null }
             : {}),
         },
       });
@@ -341,6 +354,13 @@ export class OrdersService {
     const settings = await this.prisma.tenantSetting.findUnique({ where: { tenantId: place.tenantId }, select: { ordersEnabled: true } });
     if (settings && !settings.ordersEnabled) throw new DomainError('ORDERS_OFF', 'Pedidos pelo app e totem estão pausados agora. Peça direto no balcão.');
     return place.storeId;
+  }
+
+  /** Pagamento online escolhido no pedido: ligado na loja e com provedor no servidor. */
+  async assertOnline(tenantId: string, method: 'pix' | 'cartao', totem = false): Promise<void> {
+    const s = await this.prisma.tenantSetting.findUnique({ where: { tenantId }, select: { onlinePix: true, onlineCard: true, onlineTotem: true } });
+    const on = totem ? s?.onlineTotem && method === 'pix' : method === 'pix' ? s?.onlinePix : s?.onlineCard;
+    if (!on || !this.gateway.provider) throw new DomainError('ONLINE_PAY_OFF', method === 'pix' ? 'Pagamento por Pix no app está desligado agora.' : 'Pagamento com cartão no app está desligado agora.');
   }
 
   private unpaidLimit() {
@@ -378,6 +398,8 @@ export function toOrder(r: Row): Order {
     deliveryFee: Number(r.deliveryFee),
     paymentNote: r.paymentNote,
     couponCode: r.couponCode,
+    payOnline: (r.payOnline as Order['payOnline']) ?? null,
+    online: r.onlinePayments[0] ? { id: r.onlinePayments[0].id, method: r.onlinePayments[0].method as 'pix' | 'cartao', status: r.onlinePayments[0].status as NonNullable<Order['online']>['status'], amount: Number(r.onlinePayments[0].amount), settleError: r.onlinePayments[0].settleError } : null,
     courier: r.courier ? { id: r.courier.id, name: r.courier.name } : null,
     dispatchedAt: r.dispatchedAt?.toISOString() ?? null,
     saleId: r.saleId,

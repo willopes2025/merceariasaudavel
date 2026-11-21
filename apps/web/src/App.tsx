@@ -32,6 +32,7 @@ function screen<M, C extends ComponentType<any>>(load: () => Promise<M>, pick: (
 const StoresScreen = screen(() => import('./screens/settings/StoresScreen'), (m) => m.StoresScreen);
 const UsersScreen = screen(() => import('./screens/settings/UsersScreen'), (m) => m.UsersScreen);
 const FiscalSettingsScreen = screen(() => import('./screens/settings/FiscalSettingsScreen'), (m) => m.FiscalSettingsScreen);
+const OnlinePaymentScreen = screen(() => import('./screens/settings/OnlinePaymentScreen'), (m) => m.OnlinePaymentScreen);
 const ClubScreen = screen(() => import('./screens/settings/ClubScreens'), (m) => m.ClubScreen);
 const CategoriesScreen = screen(() => import('./screens/settings/ClubScreens'), (m) => m.CategoriesScreen);
 const FiscalScreen = screen(() => import('./screens/fiscal/FiscalScreen'), (m) => m.FiscalScreen);
@@ -164,6 +165,7 @@ export function App() {
             <Route path="fornecedores" element={<SuppliersScreen />} />
             <Route path="entregas" element={<DeliveriesScreen />} />
             <Route path="configuracoes/entrega" element={<DeliverySettingsScreen />} />
+            <Route path="pagamento-online" element={<OnlinePaymentScreen />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
             <Route path="validades" element={<ExpiringScreen />} />

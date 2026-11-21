@@ -12,6 +12,7 @@ import {
   type Customer,
   type CustomerOption,
   type Order,
+  type OnlineSettings,
   type PaymentMethod,
   type ProductOption,
   type Sale,
@@ -61,7 +62,8 @@ export function PdvScreen() {
 
   const cashQ = useQuery({ queryKey: ['cash-current', storeId], queryFn: () => api<{ session: CashSession | null }>(`/cash/current?storeId=${storeId}`), enabled: Boolean(storeId) && can('cash.operate') });
   const cash = { data: cashQ.data?.session ?? null, isLoading: cashQ.isLoading };
-  const methods = useQuery({ queryKey: ['payment-methods'], queryFn: () => api<PaymentMethod[]>('/payment-methods') });
+  // "Pix online" e "Cartão online" só entram por pagamento do app (não aparecem no caixa).
+  const methods = useQuery({ queryKey: ['payment-methods'], queryFn: async () => (await api<PaymentMethod[]>('/payment-methods')).filter((m) => !/ online$/i.test(m.name)) });
 
   const [lines, setLines] = useState<Line[]>([]);
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
@@ -689,6 +691,9 @@ function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order
     mutationFn: ({ id, reason }: { id: string; reason: string }) => api(`/orders/${id}/cancel`, { method: 'POST', json: { reason } }),
     onSuccess: onChanged,
   });
+  const settle = useMutation({ mutationFn: (id: string) => api(`/orders/${id}/settle-online`, { method: 'POST' }), onSuccess: onChanged });
+  const online = useQuery({ queryKey: ['payments-settings'], queryFn: () => api<OnlineSettings>('/payments/settings'), enabled: can('settings.manage') });
+  const simulate = useMutation({ mutationFn: (id: string) => api(`/payments/test/orders/${id}/approve`, { method: 'POST', json: {} }), onSuccess: onChanged });
   return (
     <Drawer title="Pedidos para cobrar" onClose={onClose}>
       {!orders.length ? (
@@ -706,11 +711,30 @@ function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order
                     {o.customerId && <span className="badge ml-1 bg-brand-soft text-brand">Membro</span>}
                   </p>
                   <p className="text-xs text-ink-soft">Pedido às {new Date(o.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · estimado {formatMoney(o.estimate)}</p>
+                  {o.online?.status === 'pendente' && <p className="mt-1 text-xs font-medium text-amber-700">Pagando pelo app ({o.online.method === 'pix' ? 'Pix' : 'cartão'}) · {formatMoney(o.online.amount)}</p>}
+                  {o.online?.status === 'pago' && (
+                    <p className="mt-1 text-xs font-medium text-emerald-700">
+                      Pago pelo app ({o.online.method === 'pix' ? 'Pix' : 'cartão'}) · {formatMoney(o.online.amount)}
+                      {o.online.settleError && <span className="block font-normal text-ink-soft">{o.online.settleError}</span>}
+                    </p>
+                  )}
+                  {o.online?.status === 'divergente' && <p className="mt-1 text-xs font-medium text-red-600">Pago pelo app com valor diferente ({o.online.settleError}). Cancele o pedido: o valor é devolvido.</p>}
                 </div>
-                <button className="btn-primary px-3 py-1.5" onClick={() => onCharge(o)}>
-                  Cobrar
-                </button>
+                {o.online?.status === 'pago' ? (
+                  <button className="btn-primary px-3 py-1.5" disabled={settle.isPending} onClick={() => settle.mutate(o.id)}>
+                    Registrar pagamento online
+                  </button>
+                ) : o.online?.status === 'divergente' ? null : (
+                  <button className="btn-primary px-3 py-1.5" onClick={() => onCharge(o)}>
+                    Cobrar
+                  </button>
+                )}
               </div>
+              {o.online?.status === 'pendente' && online.data?.provider === 'teste' && (
+                <button className="mt-1 text-xs text-amber-700 underline" disabled={simulate.isPending} onClick={() => simulate.mutate(o.id)}>
+                  Simular pagamento (modo de teste)
+                </button>
+              )}
               <ul className="mt-2 text-sm">
                 {o.items.map((i, n) => (
                   <li key={n}>
@@ -720,7 +744,7 @@ function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order
                 ))}
               </ul>
               {o.notes && <p className="mt-1 text-xs text-ink-soft">Obs.: {o.notes}</p>}
-              {o.address && <p className="mt-1 text-xs">{addressLine(o.address)} · {o.paymentNote}</p>}
+              {o.address && <p className="mt-1 text-xs">{addressLine(o.address)} · {o.paymentNote ?? 'pago pelo app'}</p>}
               <button
                 className="mt-2 text-xs text-red-600 hover:underline"
                 disabled={cancel.isPending}
@@ -735,7 +759,7 @@ function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order
           ))}
         </ul>
       )}
-      {cancel.error && <ErrorBox error={cancel.error} />}
+      <ErrorBox error={cancel.error ?? settle.error ?? simulate.error} />
     </Drawer>
   );
 }

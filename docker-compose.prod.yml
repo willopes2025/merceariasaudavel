@@ -41,6 +41,12 @@ services:
       DB_POOL_MAX: ${DB_POOL_MAX:-10}
       APP_VERSION: ${APP_VERSION:-fase-1}
       WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
+      # Pagamento online (Mercado Pago). Sem a chave, fica desligado.
+      PUBLIC_URL: ${PUBLIC_URL:-https://mercearia.wideic.com}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
+      MP_PAYER_EMAIL: ${MP_PAYER_EMAIL:-}
+      PAY_PROVIDER: ${PAY_PROVIDER:-}
       PORT: 3000
     expose:
       - "3000"

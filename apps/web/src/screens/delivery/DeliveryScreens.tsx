@@ -85,7 +85,7 @@ export function DeliveriesScreen() {
                     {o.address?.reference && <p className="text-xs text-ink-soft">Ref.: {o.address.reference}</p>}
                     <p className="mt-1 text-xs">{o.items.map((i) => `${i.quantity}× ${i.description}`).join(', ')}</p>
                     <p className="mt-1 text-xs font-medium">
-                      {formatMoney(o.estimate)} · {o.paymentNote}
+                      {formatMoney(o.estimate)} · {o.paymentNote ?? (o.online?.status === "pago" ? "pago pelo app" : "pagando pelo app")}
                     </p>
                     {o.status === 'pronto' && (
                       <div className="mt-2 flex gap-2">

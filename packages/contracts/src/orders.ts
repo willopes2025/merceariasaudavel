@@ -56,12 +56,17 @@ export const shopOrderSchema = z
       .transform((v) => v || null),
     addressId: z.string().uuid().nullish(),
     payOnDelivery: z.enum(['pix', 'cartao', 'dinheiro']).nullish(),
+    /** Pagar agora pelo app (Pix ou cartão). */
+    payOnline: z
+      .enum(['pix', 'cartao'])
+      .nullish()
+      .transform((v) => v ?? null),
     /** Dinheiro: troco para quanto. */
     changeFor: z.preprocess((v) => (v === '' || v == null ? null : typeof v === 'string' ? Number(v.replace(/\./g, '').replace(',', '.')) : v), z.number().min(0).max(10_000).nullable()).default(null),
   })
   .superRefine((o, ctx) => {
     if (o.fulfillment === 'entrega' && !o.addressId) ctx.addIssue({ code: 'custom', message: 'Escolha o endereço da entrega', path: ['addressId'] });
-    if (o.fulfillment === 'entrega' && !o.payOnDelivery) ctx.addIssue({ code: 'custom', message: 'Diga como vai pagar na entrega', path: ['payOnDelivery'] });
+    if (o.fulfillment === 'entrega' && !o.payOnDelivery && !o.payOnline) ctx.addIssue({ code: 'custom', message: 'Diga como vai pagar na entrega', path: ['payOnDelivery'] });
   });
 export type ShopOrderInput = z.infer<typeof shopOrderSchema>;
 
@@ -125,6 +130,10 @@ export interface Order {
   deliveryFee: number;
   paymentNote: string | null;
   couponCode: string | null;
+  /** Escolheu pagar pelo app. */
+  payOnline: 'pix' | 'cartao' | null;
+  /** Último pagamento online do pedido. */
+  online: { id: string; method: 'pix' | 'cartao'; status: 'pendente' | 'pago' | 'cancelado' | 'expirado' | 'estornado' | 'divergente'; amount: number; settleError: string | null } | null;
   courier: { id: string; name: string } | null;
   dispatchedAt: string | null;
   saleId: string | null;

@@ -22,6 +22,7 @@ import {
 } from '@mercearia/contracts';
 import { AuditService } from '../../common/audit.service';
 import { ConflictError, DomainError, ForbiddenError, NotFoundError } from '../../common/errors/domain-error';
+import { OnlineRefunds } from '../../common/payments/online-refunds.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { canUseStore, type RequestContext } from '../../common/tenancy/request-context';
 import { CashService } from '../cash/cash.service';
@@ -82,6 +83,7 @@ export class SalesService {
     private readonly audit: AuditService,
     private readonly cash: CashService,
     private readonly fiscal: FiscalService,
+    private readonly online: OnlineRefunds,
   ) {}
 
   async quote(ctx: RequestContext, input: SaleQuoteInput): Promise<SaleQuote> {
@@ -94,7 +96,8 @@ export class SalesService {
     return (await this.compute(this.prisma, tenantId, input)).quote;
   }
 
-  async create(ctx: RequestContext, input: SaleCreateInput): Promise<Sale> {
+  /** `onlinePaymentId`: venda registrada a partir de um pagamento online já aprovado. */
+  async create(ctx: RequestContext, input: SaleCreateInput, opts: { onlinePaymentId?: string } = {}): Promise<Sale> {
     this.assertStore(ctx, input.storeId);
     if (input.discount > 0 && !this.can(ctx, PERMISSIONS.saleDiscount)) throw new ForbiddenError('DISCOUNT_NOT_ALLOWED', 'Você não pode dar desconto. Peça para a gerente.');
     const methodIds = [...new Set(input.payments.map((p) => p.methodId))];
@@ -114,6 +117,9 @@ export class SalesService {
           if (!order) throw new NotFoundError('pedido', input.orderId);
           if (order.status !== 'aguardando_pagamento') throw new ConflictError('ORDER_NOT_PENDING', 'Esse pedido já foi cobrado ou cancelado.');
           if (order.store_id !== input.storeId) throw new DomainError('ORDER_OTHER_STORE', 'Esse pedido é de outra loja.');
+          // Pago pelo app e ainda sem venda: só registra o próprio pagamento online (nada de cobrar de novo).
+          const paidOnline = await tx.onlinePayment.findFirst({ where: { orderId: order.id, tenantId: ctx.tenantId, status: 'pago', saleId: null }, select: { id: true } });
+          if (paidOnline && paidOnline.id !== opts.onlinePaymentId) throw new ConflictError('ORDER_PAID_ONLINE', 'Esse pedido já foi pago pelo app. Use "Registrar pagamento online".');
         }
         // Pedido com entrega: a taxa é a do pedido (bairro), não a digitada.
         if (order) input = { ...input, deliveryFee: order.fulfillment === 'entrega' ? Number(order.delivery_fee) : 0 };
@@ -202,6 +208,7 @@ export class SalesService {
         // Tela de preparo: pedido cobrado entra na fila; balcão com shake/sorvete abre pedido já pago.
         if (order) {
           await tx.order.update({ where: { id: order.id }, data: { status: 'na_fila', saleId: sale.id, paidAt: new Date(), customerId: quote.customer?.id ?? order.customer_id } });
+          if (opts.onlinePaymentId) await tx.onlinePayment.update({ where: { id: opts.onlinePaymentId }, data: { saleId: sale.id, settleError: null } });
         } else {
           const prepared = lines.filter((l) => l.kind === 'preparado');
           const settings = prepared.length ? await tx.tenantSetting.findUnique({ where: { tenantId: ctx.tenantId }, select: { kitchenFromCounter: true } }) : null;
@@ -254,6 +261,8 @@ export class SalesService {
       { timeout: 30_000, maxWait: 10_000 },
     );
 
+    // Cobrado no caixa com um Pix do app ainda aberto: cancela o Pix (se cair depois, é devolvido).
+    if (input.orderId) await this.online.cancelPending(ctx.tenantId, input.orderId);
     const created = await this.get(ctx, saleId);
     await this.audit.record(ctx, 'sale.create', 'sale', saleId, { number: created.number, total: created.total, member: created.memberPricing });
     if (created.customerId) await this.audit.record(ctx, 'sale.create', 'customer', created.customerId, { detail: `Venda nº ${created.number}: R$ ${created.total.toFixed(2).replace('.', ',')}`, saleId });
@@ -286,6 +295,8 @@ export class SalesService {
         throw new DomainError('FISCAL_CANCEL_FAILED', `A nota fiscal não foi cancelada, então a venda continua valendo. ${(e as Error).message}`);
       }
     }
+    // Pago online: devolve no provedor antes (se não conseguir, a venda continua valendo).
+    for (const p of await this.online.paidOfSale(ctx.tenantId, id)) await this.online.refund(ctx.tenantId, p.id);
     await this.prisma.$transaction(
       async (tx) => {
         const rows = await tx.$queryRaw<Array<{ status: string; store_id: string; customer_id: string | null; number: number; cashback_used: Prisma.Decimal; cashback_earned: Prisma.Decimal }>>`

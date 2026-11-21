@@ -6,6 +6,8 @@ import { AuditModule } from './common/audit.service';
 import { AuthGuard } from './common/auth/auth.guard';
 import { DomainExceptionFilter } from './common/errors/domain-exception.filter';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { PaymentsCoreModule } from './common/payments/payments-core.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { RequestContextMiddleware } from './common/tenancy/request-context.middleware';
 import { HealthController } from './health.controller';
 import { CustomersModule } from './modules/customers/customers.module';
@@ -38,6 +40,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    PaymentsCoreModule,
     AuditModule,
     IamModule,
     TenancyModule,
@@ -57,6 +60,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     PurchasingModule,
     DeliveryModule,
     PartnersModule,
+    PaymentsModule,
   ],
   controllers: [HealthController],
   providers: [

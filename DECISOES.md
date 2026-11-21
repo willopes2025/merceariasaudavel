@@ -81,6 +81,17 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Portal do parceiro por link com token, sem login. Mostra só o primeiro nome das clientes. "Link novo" derruba o antigo.
 - Kit só com produtos vendáveis (sem insumo). No app aparece só se todos os produtos estiverem no catálogo. O botão do carrinho some quando algum item exige escolher adicionais.
 
+## Pagamento online (Fase 2d)
+- Provedor: Mercado Pago. A chave fica só no `.env` do servidor, nunca no banco. Sem a chave, tudo desligado.
+- O aviso (webhook) só traz o id do pagamento. O status sempre vem de uma consulta à API do Mercado Pago com a nossa chave. Assinatura `x-signature` conferida quando `MP_WEBHOOK_SECRET` está no `.env`.
+- Sem aviso, a tela do pedido pergunta a cada 4 s e uma rotina confere a cada minuto. Nada depende só do webhook.
+- Valor = mesma conta do caixa (`SalesService.estimate`), sem usar cashback. Pago com valor diferente (centavo a mais ou a menos) fica "divergente" e não vira venda.
+- Venda automática exige caixa aberto: é registrada em nome de quem abriu o caixa. Sem caixa aberto não gera Pix.
+- Um pedido com pagamento online aprovado não pode ser cobrado de novo no caixa (`ORDER_PAID_ONLINE`). Cobrado no caixa com Pix aberto: o Pix é cancelado. Se cair mesmo assim, é devolvido.
+- Devolução antes de cancelar: se o Mercado Pago recusar a devolução, a venda (ou o pedido) não é cancelada.
+- "Pix online" e "Cartão online" são formas de pagamento criadas sozinhas e não aparecem para escolher no caixa.
+- Um pagamento do provedor vale para um registro só (índice único em provider + provider_payment_id).
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

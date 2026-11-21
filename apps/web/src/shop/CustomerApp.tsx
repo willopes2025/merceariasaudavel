@@ -17,6 +17,7 @@ import {
   type ShopPurchase,
   type ShopRepurchase,
   type ShopKit,
+  type OnlinePaymentView,
   type CustomerAddress,
   type PayOnDelivery,
   PAY_ON_DELIVERY,
@@ -24,6 +25,7 @@ import {
   zoneFee,
 } from '@mercearia/contracts';
 import { OptionPicker } from '../components/OptionPicker';
+import { OnlinePay } from './OnlinePay';
 import { useCart, type CartLine } from './cart';
 import { ApiError } from '../lib/api';
 import { customerSession, shopApi, whenCustomerSessionExpires } from './api';
@@ -367,6 +369,13 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
   const [changeFor, setChangeFor] = useState('');
   const [adding, setAdding] = useState(false);
   const [coupon, setCoupon] = useState('');
+  const online = info.data?.online;
+  const onlineMethods = [...(online?.pix ? (['pix'] as const) : []), ...(online?.card ? (['cartao'] as const) : [])];
+  const [payNow, setPayNow] = useState<'pix' | 'cartao' | null>(null);
+  useEffect(() => {
+    if (payNow === null && onlineMethods.length) setPayNow(onlineMethods[0]!);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlineMethods.length]);
   const me = useMe();
   const partner = me.data?.partner ?? null;
   const addresses = useQuery({ queryKey: ['shop', 'addresses'], queryFn: () => shopApi<CustomerAddress[]>('/me/addresses'), enabled: mode === 'entrega' });
@@ -382,7 +391,7 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
     mutationFn: () =>
       shopApi<Order>('/me/orders', {
         method: 'POST',
-        json: { items: cart.items, notes: notes || null, couponCode: coupon.trim() ? coupon.trim().toUpperCase() : null, fulfillment: mode, ...(mode === 'entrega' ? { addressId, payOnDelivery: pay, changeFor: pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
+        json: { items: cart.items, notes: notes || null, couponCode: coupon.trim() ? coupon.trim().toUpperCase() : null, fulfillment: mode, payOnline: payNow, ...(mode === 'entrega' ? { addressId, payOnDelivery: payNow ? null : pay, changeFor: !payNow && pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
       }),
     onSuccess: (o) => {
       cart.clear();
@@ -436,7 +445,7 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
               </p>
             )}
             {belowMin && zone && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Pedido mínimo para {zone.name}: {formatMoney(zone.minOrder)}.</p>}
-            <div>
+            {!payNow && <div>
               <p className="text-sm font-medium text-ink">Pagamento na entrega</p>
               <div className="mt-1 grid grid-cols-3 gap-2">
                 {(Object.keys(PAY_ON_DELIVERY) as PayOnDelivery[]).map((k) => (
@@ -446,6 +455,18 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
                 ))}
               </div>
               {pay === 'dinheiro' && <input value={changeFor} onChange={(e) => setChangeFor(e.target.value)} inputMode="decimal" placeholder="Troco para quanto? (opcional)" className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-brand" />}
+            </div>}
+          </div>
+        )}
+        {onlineMethods.length > 0 && (
+          <div className="mt-3">
+            <p className="text-sm font-medium text-ink">Como vai pagar?</p>
+            <div className={`mt-1 grid gap-2 ${onlineMethods.length > 1 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              {[...onlineMethods, null].map((k) => (
+                <button key={k ?? 'local'} onClick={() => setPayNow(k)} className={`rounded-xl border px-2 py-2.5 text-sm ${payNow === k ? 'border-brand bg-brand-soft font-semibold text-brand-dark' : 'border-slate-200'}`}>
+                  {k === 'pix' ? 'Pix agora' : k === 'cartao' ? 'Cartão agora' : mode === 'entrega' ? 'Na entrega' : 'No caixa'}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -469,11 +490,11 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
           <span className="text-2xl font-bold text-ink">{formatMoney(goods + fee)}</span>
         </div>
         <p className="mt-1 text-xs text-ink-soft">
-          {mode === 'entrega' ? 'A loja confirma, prepara e manda. Você paga ao entregador.' : 'Você paga no caixa (Pix, cartão ou dinheiro) e o preparo começa na hora. Cashback pode ser usado no pagamento.'}
+          {payNow ? 'Você paga agora pelo app e o preparo começa assim que o pagamento cair.' : mode === 'entrega' ? 'A loja confirma, prepara e manda. Você paga ao entregador.' : 'Você paga no caixa (Pix, cartão ou dinheiro) e o preparo começa na hora. Cashback pode ser usado no pagamento.'}
         </p>
         <ErrorLine error={m.error} />
         <button disabled={m.isPending || (mode === 'entrega' && (!addressId || belowMin))} onClick={() => m.mutate()} className="mt-3 w-full rounded-xl bg-brand py-3.5 text-base font-semibold text-white disabled:opacity-60">
-          {m.isPending ? 'Enviando…' : mode === 'entrega' ? 'Pedir entrega · pagar na entrega' : 'Fazer pedido · pagar no caixa'}
+          {m.isPending ? 'Enviando…' : payNow ? `Fazer pedido · pagar com ${payNow === 'pix' ? 'Pix' : 'cartão'}` : mode === 'entrega' ? 'Pedir entrega · pagar na entrega' : 'Fazer pedido · pagar no caixa'}
         </button>
         <button onClick={cart.clear} className="mt-2 w-full py-2 text-sm text-ink-soft">
           Esvaziar
@@ -502,9 +523,12 @@ function OrderTrack({ me }: { me: ShopMe }) {
       qc.invalidateQueries({ queryKey: ['shop', 'orders'] });
     },
   });
+  const info = useInfo();
   if (order.isLoading) return <Spinner />;
   const o = order.data;
   if (!o) return <ErrorLine error={order.error} />;
+  const onlineMethods = [...(info.data?.online.pix ? (['pix'] as const) : []), ...(info.data?.online.card ? (['cartao'] as const) : [])];
+  const canPayOnline = o.status === 'aguardando_pagamento' && (onlineMethods.length > 0 || Boolean(o.online && o.online.status !== 'cancelado'));
   const steps = o.fulfillment === 'entrega' ? DELIVERY_STEPS : STEPS;
   const step = steps.indexOf(o.status === 'pronto' && o.fulfillment === 'entrega' ? 'preparando' : o.status);
   return (
@@ -513,13 +537,23 @@ function OrderTrack({ me }: { me: ShopMe }) {
         <p className="text-sm font-semibold uppercase tracking-wider opacity-80">Pedido</p>
         <p className="text-7xl font-bold tabular-nums">{o.number}</p>
         <p className="mt-2 text-xl font-bold">
-          {o.fulfillment === 'entrega' ? (o.status === 'aguardando_pagamento' ? 'A loja vai confirmar' : o.status === 'pronto' ? 'Pronto, saindo já' : o.status === 'saiu_entrega' ? 'A caminho! 🛵' : ORDER_STATUS[o.status]) : ORDER_STATUS[o.status]}
+          {o.status === 'aguardando_pagamento' && o.payOnline ? 'Esperando o pagamento' : o.fulfillment === 'entrega' ? (o.status === 'aguardando_pagamento' ? 'A loja vai confirmar' : o.status === 'pronto' ? 'Pronto, saindo já' : o.status === 'saiu_entrega' ? 'A caminho! 🛵' : ORDER_STATUS[o.status]) : ORDER_STATUS[o.status]}
         </p>
-        {o.fulfillment !== 'entrega' && o.status === 'aguardando_pagamento' && <p className="mt-1 text-sm opacity-90">Vá ao caixa e mostre seu cartão ({me.memberCode}) ou diga o número do pedido.</p>}
+        {o.fulfillment !== 'entrega' && o.status === 'aguardando_pagamento' && <p className="mt-1 text-sm opacity-90">{o.payOnline ? 'Pague aqui embaixo e o preparo começa sozinho.' : `Pague aqui pelo app ou vá ao caixa e mostre seu cartão (${me.memberCode}).`}</p>}
         {o.fulfillment !== 'entrega' && o.status === 'pronto' && <p className="mt-1 text-sm font-medium">Pode retirar no balcão!</p>}
-        {o.fulfillment === 'entrega' && o.status !== 'cancelado' && o.status !== 'entregue' && <p className="mt-1 text-sm opacity-90">{o.paymentNote}</p>}
+        {o.fulfillment === 'entrega' && o.status !== 'cancelado' && o.status !== 'entregue' && <p className="mt-1 text-sm opacity-90">{o.paymentNote ?? (o.saleId ? 'Pago pelo app' : 'Pague pelo app')}</p>}
         {o.status === 'cancelado' && o.cancelReason && <p className="mt-1 text-sm">{o.cancelReason}</p>}
       </section>
+      {canPayOnline && (
+        <OnlinePay
+          id={o.id}
+          methods={onlineMethods}
+          preferred={o.payOnline}
+          start={(method) => shopApi<OnlinePaymentView>(`/me/orders/${o.id}/pay`, { method: 'POST', json: { method } })}
+          poll={() => shopApi<OnlinePaymentView | { status: null }>(`/me/orders/${o.id}/pay`)}
+          onPaid={() => void order.refetch()}
+        />
+      )}
       {o.status !== 'cancelado' && (
         <ol className="flex justify-between rounded-2xl bg-white p-4 text-center text-[11px] shadow-sm">
           {steps.map((s, i) => (

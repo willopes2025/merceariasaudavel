@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query';
-import { formatMoney, type Order, type ShopCatalog, type ShopInfo, type ShopProduct } from '@mercearia/contracts';
+import { formatMoney, type OnlinePaymentView, type Order, type ShopCatalog, type ShopInfo, type ShopProduct } from '@mercearia/contracts';
+import { OnlinePay } from './OnlinePay';
 import { OptionPicker } from '../components/OptionPicker';
 import { shopApi } from './api';
 import { useCart } from './cart';
@@ -48,13 +49,15 @@ function Menu() {
 
   const startOverRef = useRef(startOver);
   startOverRef.current = startOver;
+  const placedRef = useRef(placed);
+  placedRef.current = placed;
   // Totem: 90 s sem toque volta tudo ao começo (busca limpa, carrinho vazio, topo da página).
   useEffect(() => {
     if (!totem) return;
     let timer = 0;
     const arm = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => startOverRef.current(), 90_000);
+      timer = window.setTimeout(() => (placedRef.current ? arm() : startOverRef.current()), 90_000);
     };
     const events = ['pointerdown', 'keydown', 'scroll'] as const;
     events.forEach((e) => window.addEventListener(e, arm, { passive: true }));
@@ -144,7 +147,7 @@ function Menu() {
         />
       )}
       {checkout && <TotemCheckout cart={cart} onClose={() => setCheckout(false)} onPlaced={(o) => { cart.clear(); setCheckout(false); setPlaced(o); }} />}
-      {placed && <TotemPlaced order={placed} onDone={startOver} />}
+      {placed && <TotemPlaced order={placed} online={Boolean(info.data?.online.totem)} onDone={startOver} />}
     </div>
   );
 }
@@ -216,8 +219,10 @@ function TotemCheckout({ cart, onClose, onPlaced }: { cart: Cart; onClose: () =>
   );
 }
 
-function TotemPlaced({ order, onDone }: { order: Order; onDone: () => void }) {
-  const [left, setLeft] = useState(20);
+function TotemPlaced({ order, online, onDone }: { order: Order; online: boolean; onDone: () => void }) {
+  const [paying, setPaying] = useState(online);
+  const [paid, setPaid] = useState(false);
+  const [left, setLeft] = useState(online ? 180 : 20);
   useEffect(() => {
     const t = window.setInterval(() => setLeft((n) => n - 1), 1000);
     return () => window.clearInterval(t);
@@ -225,14 +230,39 @@ function TotemPlaced({ order, onDone }: { order: Order; onDone: () => void }) {
   useEffect(() => {
     if (left <= 0) onDone();
   }, [left, onDone]);
+  const onPaid = useCallback(() => {
+    setPaid(true);
+    setLeft(12);
+  }, []);
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-brand-dark p-8 text-center text-white" onClick={onDone}>
-      <Leaf className="h-16 w-16" />
-      <p className="mt-6 text-2xl text-white/80">Obrigado, {order.callName}! Seu pedido é o</p>
-      <p className="text-[10rem] font-bold leading-none tabular-nums text-brand-accent">{order.number}</p>
-      <p className="mt-4 text-3xl font-bold">Pague no caixa e acompanhe na TV de retirada.</p>
-      <p className="mt-2 text-xl text-white/70">Valor estimado {formatMoney(order.estimate)}{order.customerId ? ' (preço de membro)' : ''}</p>
-      <p className="mt-10 text-lg text-white/50">Toque para fazer outro pedido ({left})</p>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-brand-dark p-8 text-center text-white" onClick={paying && !paid ? undefined : onDone}>
+      <Leaf className="h-12 w-12" />
+      <p className="mt-4 text-2xl text-white/80">Obrigado, {order.callName}! Seu pedido é o</p>
+      <p className={`${paying && !paid ? 'text-8xl' : 'text-[10rem]'} font-bold leading-none tabular-nums text-brand-accent`}>{order.number}</p>
+      {paying && !paid ? (
+        <div className="mt-4 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <OnlinePay
+            id={order.id}
+            big
+            methods={['pix']}
+            preferred="pix"
+            start={() => shopApi<OnlinePaymentView>(`/totem/orders/${order.id}/pay`, { method: 'POST' })}
+            poll={() => shopApi<OnlinePaymentView | { status: null }>(`/totem/orders/${order.id}/pay`)}
+            onPaid={onPaid}
+          />
+          <button className="mt-4 text-xl text-white/80 underline" onClick={() => { setPaying(false); setLeft(20); }}>
+            Prefiro pagar no caixa
+          </button>
+        </div>
+      ) : paid ? (
+        <p className="mt-4 text-3xl font-bold">Pago! Já foi para o preparo. Acompanhe na TV de retirada.</p>
+      ) : (
+        <>
+          <p className="mt-4 text-3xl font-bold">Pague no caixa e acompanhe na TV de retirada.</p>
+          <p className="mt-2 text-xl text-white/70">Valor estimado {formatMoney(order.estimate)}{order.customerId ? ' (preço de membro)' : ''}</p>
+        </>
+      )}
+      <p className="mt-8 text-lg text-white/50">{paying && !paid ? `Volta ao começo em ${left} s` : `Toque para fazer outro pedido (${left})`}</p>
     </div>
   );
 }

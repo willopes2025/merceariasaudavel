@@ -71,7 +71,7 @@ cp apps/api/.env.example apps/api/.env      # ajuste DATABASE_URL
 npm run db:deploy && npm run db:seed        # com SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD
 npm run dev                                  # API em :3000, sistema em :5180
 npm test                                     # testes unitários
-npm run e2e                                  # ponta a ponta contra um Postgres local (API com SHOP_SIGNUPS_PER_HOUR=100)
+npm run e2e                                  # ponta a ponta contra um Postgres local (API com SHOP_SIGNUPS_PER_HOUR=200 PAY_PROVIDER=teste)
 ```
 
 Sem acesso ao servidor de binários do Prisma, use `PRISMA_JS_ENGINE=1`.
@@ -147,3 +147,25 @@ Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
 - **Kits (Crescer):** cestas por objetivo ou receitadas por um parceiro. No app
   aparecem em "Kits prontos", com o botão "Pôr tudo no carrinho". O link do kit
   (`/app?ref=CODIGO&kit=…`) abre o app com o kit em destaque.
+
+## Fase 2d — pagamento online (Mercado Pago)
+
+- **Vender › Pagamento no app e no totem:** liga Pix no app, cartão no app e Pix no
+  totem. A tela mostra se o Mercado Pago está ligado no servidor e o endereço do aviso
+  (webhook).
+- **App:** no carrinho a cliente escolhe Pix agora, Cartão agora ou No caixa / Na entrega.
+  - Pix: QR e copia e cola na tela do pedido, com o prazo de 15 min.
+  - Cartão: abre a página do Mercado Pago (o cartão não passa pela loja) e volta para o pedido.
+- **Totem:** depois do pedido, mostra o QR do Pix. Quem preferir paga no caixa.
+- **Pagou:** a venda é registrada sozinha no caixa aberto ("Pix online" / "Cartão
+  online", com cashback, cupom, parceiro e NFC-e) e o pedido entra na fila do preparo.
+- **Casos especiais:**
+  - Caixa fechado quando o pagamento cai: o pedido aparece em "Pedidos para cobrar"
+    com o botão "Registrar pagamento online". O caixa não consegue cobrar de novo.
+  - Valor diferente do pedido: não vira venda. Cancelar o pedido devolve o dinheiro.
+  - Pagamento que cai num pedido cancelado ou já cobrado no caixa é devolvido sozinho.
+  - Cancelar uma venda paga online devolve o dinheiro pelo Mercado Pago.
+- **Ligar:** no `.env` do servidor, `MP_ACCESS_TOKEN=APP_USR-...` e `MP_WEBHOOK_SECRET=...`
+  (Webhooks do Mercado Pago, evento "Pagamentos"), depois `./scripts/atualizar.sh`.
+  Para testar sem cobrar: `PAY_PROVIDER=teste` (aparece "Simular pagamento" no caixa).
+- **Testes locais:** `npm run e2e` com a API rodando com `PAY_PROVIDER=teste`.

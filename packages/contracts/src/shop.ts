@@ -120,6 +120,8 @@ export interface ShopInfo {
   delivery: { enabled: boolean; city: string | null; zones: Array<{ id: string; name: string; fee: number; minOrder: number; freeAbove: number | null; etaMinutes: number }> };
   /** Campanhas rodando (ofertas e cashback turbinado; cupom não aparece). */
   campaigns: Array<{ id: string; name: string; type: 'cashback' | 'oferta'; description: string | null; until: string; membersOnly: boolean; extraCashbackPct: number | null }>;
+  /** Pagamento online ligado (e o provedor pronto). */
+  online: { pix: boolean; card: boolean; totem: boolean };
 }
 
 /** "Hora de repor": produto que a cliente costuma comprar e deve estar acabando. */
