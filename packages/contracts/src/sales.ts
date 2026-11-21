@@ -42,6 +42,8 @@ export const saleQuoteSchema = z.object({
   discount: money.default(0),
   /** Quanto do cashback a cliente quer usar. */
   useCashback: money.default(0),
+  /** Taxa de entrega (pedido com entrega já traz a taxa do bairro). */
+  deliveryFee: money.default(0),
   /** Cupom digitado no caixa. */
   couponCode: z
     .string()
@@ -126,6 +128,8 @@ export interface SaleQuote {
   couponError: string | null;
   /** Parte do cashback ganho que vem de campanha. */
   campaignCashback: number;
+  /** Taxa de entrega cobrada (soma no total; fica fora da NFC-e). */
+  deliveryFee: number;
   /** Cliente faz aniversário este mês e tem cupom de aniversário para usar. */
   birthdayCoupon: { code: string; name: string; summary: string } | null;
 }
@@ -161,6 +165,7 @@ export interface Sale {
   couponDiscount: number;
   promoSavings: number;
   campaignCashback: number;
+  deliveryFee: number;
   total: number;
   /** Troco devolvido em dinheiro. */
   change: number;

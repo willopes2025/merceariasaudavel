@@ -147,6 +147,7 @@ export function SaleScreen() {
           <Line label="Produtos" value={formatMoney(s.grossTotal)} />
           {s.memberSavings > 0 && <Line label="Preço de membro" value={`− ${formatMoney(s.memberSavings)}`} />}
           {s.promoSavings > 0 && <Line label="Ofertas" value={`− ${formatMoney(s.promoSavings)}`} />}
+          {s.deliveryFee > 0 && <Line label="Entrega (fora da nota)" value={`+ ${formatMoney(s.deliveryFee)}`} />}
           {s.discount - s.couponDiscount > 0.004 && <Line label="Desconto" value={`− ${formatMoney(s.discount - s.couponDiscount)}`} />}
           {s.couponDiscount > 0 && <Line label={`Cupom ${s.couponCode ?? ''}`} value={`− ${formatMoney(s.couponDiscount)}`} />}
           {s.cashbackUsed > 0 && <Line label="Cashback usado" value={`− ${formatMoney(s.cashbackUsed)}`} />}

@@ -108,3 +108,20 @@ Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
   texto pronto) → recebido (pode dar entrada no estoque com os custos do pedido).
 - **Fornecedores:** prazo de entrega, WhatsApp e pedido mínimo. Fornecedor de
   nota de entrada (XML) vira cadastro sozinho e fica como principal dos produtos da nota.
+
+## Fase 2c — entrega
+
+- **Configurações › Entrega:** liga/desliga, cidade, bairros atendidos (taxa,
+  pedido mínimo, grátis acima de, prazo) e entregadores.
+- **No app**, a cliente escolhe "Retirar na loja" ou "Receber em casa":
+  - endereço salvo, com o bairro escolhido da lista de bairros atendidos;
+  - taxa e prazo do bairro;
+  - pagamento na entrega (Pix, cartão ou dinheiro com troco);
+  - acompanhamento: confirmar → fila → preparo → a caminho → entregue.
+- **Caixa:** registra o pedido com a taxa do bairro. A taxa soma no total, mas não
+  gera cashback e fica fora da NFC-e.
+- **Entregas (Operar):** aguardando o caixa → no preparo → prontos para sair
+  (escolhe o entregador, "Saiu") → em rota → entregue.
+- **Página do entregador** (`/entregador/<link>`), sem login: endereço com rota no
+  Google Maps, ligar/WhatsApp, valor a cobrar e o botão "Entregue". "Link novo"
+  derruba o antigo.

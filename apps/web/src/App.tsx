@@ -48,6 +48,9 @@ const CampaignsScreen = screen(() => import('./screens/growth/CampaignsScreen'),
 const StockIntelScreen = screen(() => import('./screens/purchasing/StockIntelScreen'), (m) => m.StockIntelScreen);
 const SuppliersScreen = screen(() => import('./screens/purchasing/PurchasingScreens'), (m) => m.SuppliersScreen);
 const PurchaseOrdersScreen = screen(() => import('./screens/purchasing/PurchasingScreens'), (m) => m.PurchaseOrdersScreen);
+const DeliveriesScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliveriesScreen);
+const DeliverySettingsScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliverySettingsScreen);
+const CourierPage = screen(() => import('./shop/CourierPage'), (m) => m.CourierPage);
 const AppLinksScreen = screen(() => import('./screens/shop/AppLinksScreen'), (m) => m.AppLinksScreen);
 const PdvScreen = screen(() => import('./screens/pdv/PdvScreen'), (m) => m.PdvScreen);
 const SalesScreen = screen(() => import('./screens/sales/SalesScreen'), (m) => m.SalesScreen);
@@ -102,6 +105,14 @@ export function App() {
       </Suspense>
     );
   }
+  const courier = path.match(/^\/entregador\/([a-f0-9]{32})\/?$/);
+  if (courier) {
+    return (
+      <Suspense fallback={null}>
+        <CourierPage token={courier[1]!} />
+      </Suspense>
+    );
+  }
   if (path === '/retirada' || path === '/retirada/') {
     return (
       <Suspense fallback={null}>
@@ -138,6 +149,8 @@ export function App() {
             <Route path="inteligencia-estoque" element={<StockIntelScreen />} />
             <Route path="compras" element={<PurchaseOrdersScreen />} />
             <Route path="fornecedores" element={<SuppliersScreen />} />
+            <Route path="entregas" element={<DeliveriesScreen />} />
+            <Route path="configuracoes/entrega" element={<DeliverySettingsScreen />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
             <Route path="validades" element={<ExpiringScreen />} />

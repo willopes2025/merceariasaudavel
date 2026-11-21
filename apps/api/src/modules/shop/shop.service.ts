@@ -18,6 +18,8 @@ import {
   type ShopProfileInput,
   type ShopPurchase,
   type ShopRepurchase,
+  type AddressInput,
+  type CustomerAddress,
   type ShopSignupInput,
   type Unit,
 } from '@mercearia/contracts';
@@ -99,10 +101,21 @@ export class ShopService {
 
   async info(slug: string): Promise<ShopInfo> {
     const t = await this.tenant(slug);
-    const [club, settings] = await Promise.all([clubRules(this.prisma, t.tenantId), this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true } })]);
+    const [club, settings, zones] = await Promise.all([
+      clubRules(this.prisma, t.tenantId),
+      this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true, deliveryEnabled: true, deliveryCity: true } }),
+      this.prisma.deliveryZone.findMany({ where: { tenantId: t.tenantId, active: true }, orderBy: { name: 'asc' } }),
+    ]);
     const running = await runningCampaigns(this.prisma, t.tenantId);
     const campaigns = running.map((c) => ({ id: c.id, name: c.name, type: c.type as 'cashback' | 'oferta', description: c.description, until: c.endsOn, membersOnly: c.type === 'cashback' || c.audience === 'membros', extraCashbackPct: c.extraCashbackPct }));
-    return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club, ordersEnabled: Boolean(t.storeId) && (settings?.ordersEnabled ?? true), campaigns };
+    return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club, ordersEnabled: Boolean(t.storeId) && (settings?.ordersEnabled ?? true),
+      campaigns,
+      delivery: {
+        enabled: Boolean(settings?.deliveryEnabled) && zones.length > 0,
+        city: settings?.deliveryCity ?? null,
+        zones: zones.map((z) => ({ id: z.id, name: z.name, fee: Number(z.fee), minOrder: Number(z.minOrder), freeAbove: z.freeAbove == null ? null : Number(z.freeAbove), etaMinutes: z.etaMinutes })),
+      },
+    };
   }
 
   async catalog(slug: string): Promise<ShopCatalog> {
@@ -380,6 +393,31 @@ export class ShopService {
       })
       .filter((r): r is ShopRepurchase => r !== null)
       .slice(0, 6);
+  }
+
+  // ---------------------------------------------------------------- endereços
+
+  async addresses(s: CustomerSession): Promise<CustomerAddress[]> {
+    const rows = await this.prisma.customerAddress.findMany({ where: { tenantId: s.tenantId, customerId: s.customerId }, include: { zone: { select: { name: true } } }, orderBy: { updatedAt: 'desc' } });
+    return rows.map((a) => ({ id: a.id, label: a.label, street: a.street, number: a.number, complement: a.complement, zoneId: a.zoneId, zoneName: a.zone.name, reference: a.reference }));
+  }
+
+  async saveAddress(s: CustomerSession, id: string | null, input: AddressInput): Promise<CustomerAddress[]> {
+    const zone = await this.prisma.deliveryZone.findFirst({ where: { id: input.zoneId, tenantId: s.tenantId, active: true } });
+    if (!zone) throw new DomainError('ZONE_NOT_FOUND', 'Ainda não entregamos nesse bairro.');
+    if (id) {
+      const changed = await this.prisma.customerAddress.updateMany({ where: { id, tenantId: s.tenantId, customerId: s.customerId }, data: input });
+      if (!changed.count) throw new NotFoundError('endereço', id);
+    } else {
+      if ((await this.prisma.customerAddress.count({ where: { tenantId: s.tenantId, customerId: s.customerId } })) >= 10) throw new DomainError('TOO_MANY_ADDRESSES', 'No máximo 10 endereços. Apague um antes.');
+      await this.prisma.customerAddress.create({ data: { ...input, tenantId: s.tenantId, customerId: s.customerId } });
+    }
+    return this.addresses(s);
+  }
+
+  async deleteAddress(s: CustomerSession, id: string): Promise<CustomerAddress[]> {
+    await this.prisma.customerAddress.deleteMany({ where: { id, tenantId: s.tenantId, customerId: s.customerId } });
+    return this.addresses(s);
   }
 
   // ---------------------------------------------------------------- apoio

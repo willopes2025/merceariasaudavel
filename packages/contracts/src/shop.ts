@@ -108,6 +108,8 @@ export interface ShopInfo {
   club: { cashbackPct: number; cashbackDays: number; cashbackMaxUsePct: number };
   /** App e totem aceitam pedido (paga no caixa). */
   ordersEnabled: boolean;
+  /** Entrega pelo app: bairros atendidos. */
+  delivery: { enabled: boolean; city: string | null; zones: Array<{ id: string; name: string; fee: number; minOrder: number; freeAbove: number | null; etaMinutes: number }> };
   /** Campanhas rodando (ofertas e cashback turbinado; cupom não aparece). */
   campaigns: Array<{ id: string; name: string; type: 'cashback' | 'oferta'; description: string | null; until: string; membersOnly: boolean; extraCashbackPct: number | null }>;
 }

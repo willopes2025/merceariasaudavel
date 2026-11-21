@@ -57,7 +57,7 @@ export const NAV: NavGroup[] = [
       { label: 'Inteligência de estoque', path: '/inteligencia-estoque', phase: 0, permission: 'stock.view' },
       { label: 'Pedidos de compra', path: '/compras', phase: 0, permission: 'purchase.manage' },
       { label: 'Fornecedores', path: '/fornecedores', phase: 0, permission: 'stock.view' },
-      { label: 'Entregas', path: '/entregas', phase: 2, description: 'Motoboy com rota, iFood, 99Food, Correios e retirada na loja num lugar só.' },
+      { label: 'Entregas', path: '/entregas', phase: 0, permission: 'order.prepare' },
     ],
   },
   {
@@ -90,6 +90,7 @@ export const NAV: NavGroup[] = [
       { label: 'Clube e cashback', path: '/configuracoes/clube', phase: 0, permission: 'settings.manage' },
       { label: 'Categorias', path: '/configuracoes/categorias', phase: 0, permission: 'product.manage' },
       { label: 'Telas de TV', path: '/configuracoes/tv', phase: 0, permission: 'goal.manage' },
+      { label: 'Entrega', path: '/configuracoes/entrega', phase: 0, permission: 'settings.manage' },
       { label: 'Nota fiscal', path: '/configuracoes/fiscal', phase: 0, permission: 'settings.manage' },
     ],
   },

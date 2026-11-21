@@ -63,6 +63,15 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Risco de vencer: lotes por validade; o que o ritmo atual não vende até a data conta como risco (lotes até 180 dias).
 - Pedido recebido pode dar entrada no estoque (lote `PC<nº>` quando o produto controla lote) e atualiza o custo.
 
+## Entrega (Fase 2c)
+- Bairro é escolhido da lista (sem geolocalização): taxa, mínimo, grátis acima de e prazo por bairro.
+- Pedido de entrega é pago na entrega: o caixa registra a venda com a forma que a cliente escolheu
+  (o entregador recebe) e o pedido vai ao preparo. A taxa vem do pedido, não do que se digita no caixa.
+- Taxa de entrega soma no total pago, não gera cashback, não pode ser paga com cashback e fica fora da
+  NFC-e (a nota cobre as mercadorias; os pagamentos da nota são limitados ao total dos itens).
+- Entrega só fecha depois do despacho (`saiu_entrega`); não aparece na TV de retirada.
+- Entregador abre pelo link com token (32 hex); "link novo" troca o token. Ele só vê e fecha as entregas dele.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

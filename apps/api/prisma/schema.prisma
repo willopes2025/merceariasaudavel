@@ -62,6 +62,10 @@ model TenantSetting {
   msgRepurchase    String?  @map("msg_repurchase")
   msgLapsed        String?  @map("msg_lapsed")
   msgBirthday      String?  @map("msg_birthday")
+  /// Entrega pelo app ligada.
+  deliveryEnabled  Boolean  @default(false) @map("delivery_enabled")
+  /// Cidade das entregas (vai junto no endereço do mapa).
+  deliveryCity     String?  @map("delivery_city")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -208,6 +212,7 @@ model Customer {
   cashback CashbackEntry[]
   access   CustomerAccess?
   contacts CustomerContact[]
+  addresses CustomerAddress[]
 
   @@unique([tenantId, document])
   @@unique([tenantId, memberCode])
@@ -510,6 +515,8 @@ model Sale {
   promoSavings  Decimal   @default(0) @map("promo_savings") @db.Decimal(12, 2)
   /// Parte do cashback ganho que veio de campanha (cashback turbinado).
   campaignCashback Decimal @default(0) @map("campaign_cashback") @db.Decimal(12, 2)
+  /// Taxa de entrega (soma no total pago; fica fora da NFC-e).
+  deliveryFee   Decimal   @default(0) @map("delivery_fee") @db.Decimal(12, 2)
   /// Custo dos produtos e insumos que saíram (para a margem).
   costTotal     Decimal   @default(0) @map("cost_total") @db.Decimal(12, 2)
   itemsCount    Decimal   @default(0) @map("items_count") @db.Decimal(14, 3)
@@ -809,6 +816,16 @@ model Order {
   /// Valor estimado quando o pedido foi feito (o caixa recalcula ao cobrar).
   estimate     Decimal   @default(0) @db.Decimal(12, 2)
   notes        String?
+  /// retirada | entrega
+  fulfillment  String    @default("retirada")
+  /// Endereço da entrega (foto do momento): { street, number, complement, neighborhood, reference }
+  address      Json?
+  zoneId       String?   @map("zone_id")
+  deliveryFee  Decimal   @default(0) @map("delivery_fee") @db.Decimal(12, 2)
+  /// Como vai pagar na entrega: "Pix", "Cartão", "Dinheiro, troco para R$ 100".
+  paymentNote  String?   @map("payment_note")
+  courierId    String?   @map("courier_id")
+  dispatchedAt DateTime? @map("dispatched_at")
   saleId       String?   @unique @map("sale_id")
   createdAt    DateTime  @default(now()) @map("created_at")
   paidAt       DateTime? @map("paid_at")
@@ -822,6 +839,8 @@ model Order {
   store    Store     @relation(fields: [storeId], references: [id])
   customer Customer? @relation(fields: [customerId], references: [id])
   sale     Sale?     @relation(fields: [saleId], references: [id])
+  courier  Courier?  @relation(fields: [courierId], references: [id])
+  zone     DeliveryZone? @relation(fields: [zoneId], references: [id])
 
   @@index([tenantId, storeId, status])
   @@index([tenantId, customerId, createdAt])
@@ -955,4 +974,63 @@ model PurchaseOrder {
   @@index([tenantId, status])
   @@index([tenantId, supplierId])
   @@map("purchase_order")
+}
+
+/// Bairro atendido: taxa, pedido mínimo e prazo.
+model DeliveryZone {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  name       String
+  fee        Decimal  @default(0) @db.Decimal(12, 2)
+  minOrder   Decimal  @default(0) @map("min_order") @db.Decimal(12, 2)
+  /// Acima deste valor a entrega sai grátis (vazio = nunca).
+  freeAbove  Decimal? @map("free_above") @db.Decimal(12, 2)
+  etaMinutes Int      @default(45) @map("eta_minutes")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  orders    Order[]
+  addresses CustomerAddress[]
+
+  @@unique([tenantId, name])
+  @@map("delivery_zone")
+}
+
+/// Endereço salvo da cliente (no app).
+model CustomerAddress {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  customerId   String   @map("customer_id")
+  label        String?
+  street       String
+  number       String
+  complement   String?
+  zoneId       String   @map("zone_id")
+  reference    String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  customer Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  zone     DeliveryZone @relation(fields: [zoneId], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("customer_address")
+}
+
+/// Entregador: abre as entregas dele por um link (sem login).
+model Courier {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  phone     String?
+  token     String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  orders Order[]
+
+  @@index([tenantId, active])
+  @@map("courier")
 }

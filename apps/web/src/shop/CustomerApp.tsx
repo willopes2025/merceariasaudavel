@@ -16,6 +16,11 @@ import {
   type ShopProduct,
   type ShopPurchase,
   type ShopRepurchase,
+  type CustomerAddress,
+  type PayOnDelivery,
+  PAY_ON_DELIVERY,
+  addressLine,
+  zoneFee,
 } from '@mercearia/contracts';
 import { OptionPicker } from '../components/OptionPicker';
 import { useCart, type CartLine } from './cart';
@@ -331,9 +336,29 @@ function CartLines({ cart, member }: { cart: Cart; member: boolean }) {
 function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const info = useInfo();
+  const delivery = info.data?.delivery;
   const [notes, setNotes] = useState('');
+  const [mode, setMode] = useState<'retirada' | 'entrega'>('retirada');
+  const [addressId, setAddressId] = useState<string | null>(null);
+  const [pay, setPay] = useState<PayOnDelivery>('pix');
+  const [changeFor, setChangeFor] = useState('');
+  const [adding, setAdding] = useState(false);
+  const addresses = useQuery({ queryKey: ['shop', 'addresses'], queryFn: () => shopApi<CustomerAddress[]>('/me/addresses'), enabled: mode === 'entrega' });
+  useEffect(() => {
+    if (mode === 'entrega' && !addressId && addresses.data?.length) setAddressId(addresses.data[0]!.id);
+  }, [mode, addressId, addresses.data]);
+  const goods = cart.total(true);
+  const address = addresses.data?.find((a) => a.id === addressId) ?? null;
+  const zone = address ? delivery?.zones.find((z) => z.id === address.zoneId) : undefined;
+  const fee = mode === 'entrega' && zone ? zoneFee(zone, goods) : 0;
+  const belowMin = mode === 'entrega' && zone ? goods < zone.minOrder : false;
   const m = useMutation({
-    mutationFn: () => shopApi<Order>('/me/orders', { method: 'POST', json: { items: cart.items, notes: notes || null } }),
+    mutationFn: () =>
+      shopApi<Order>('/me/orders', {
+        method: 'POST',
+        json: { items: cart.items, notes: notes || null, fulfillment: mode, ...(mode === 'entrega' ? { addressId, payOnDelivery: pay, changeFor: pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
+      }),
     onSuccess: (o) => {
       cart.clear();
       qc.invalidateQueries({ queryKey: ['shop', 'orders'] });
@@ -351,18 +376,68 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
           </button>
         </div>
         <CartLines cart={cart} member />
+        {delivery?.enabled && (
+          <div className="mt-3 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+            {(['retirada', 'entrega'] as const).map((k) => (
+              <button key={k} onClick={() => setMode(k)} className={`rounded-lg py-2 text-sm font-semibold ${mode === k ? 'bg-white text-brand shadow-sm' : 'text-ink-soft'}`}>
+                {k === 'retirada' ? 'Retirar na loja' : '🛵 Receber em casa'}
+              </button>
+            ))}
+          </div>
+        )}
+        {mode === 'entrega' && (
+          <div className="mt-3 space-y-3">
+            {addresses.data?.map((a) => (
+              <label key={a.id} className={`flex items-start gap-3 rounded-xl border p-3 text-sm ${addressId === a.id ? 'border-brand bg-brand-soft' : 'border-slate-200'}`}>
+                <input type="radio" className="mt-1 accent-brand" checked={addressId === a.id} onChange={() => setAddressId(a.id)} />
+                <span>
+                  {a.label && <b>{a.label} · </b>}
+                  {a.street}, {a.number}
+                  {a.complement ? ` (${a.complement})` : ''} — {a.zoneName}
+                </span>
+              </label>
+            ))}
+            {adding || !addresses.data?.length ? (
+              <AddressForm zones={delivery?.zones ?? []} onSaved={(list) => { qc.setQueryData(['shop', 'addresses'], list); setAddressId(list[0]?.id ?? null); setAdding(false); }} onCancel={addresses.data?.length ? () => setAdding(false) : undefined} />
+            ) : (
+              <button className="text-sm font-medium text-brand" onClick={() => setAdding(true)}>
+                + Outro endereço
+              </button>
+            )}
+            {zone && (
+              <p className="text-xs text-ink-soft">
+                Entrega em {zone.name}: {fee > 0 ? formatMoney(fee) : 'grátis'} · chega em cerca de {zone.etaMinutes} min
+                {zone.freeAbove != null && fee > 0 ? ` · grátis acima de ${formatMoney(zone.freeAbove)}` : ''}
+              </p>
+            )}
+            {belowMin && zone && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Pedido mínimo para {zone.name}: {formatMoney(zone.minOrder)}.</p>}
+            <div>
+              <p className="text-sm font-medium text-ink">Pagamento na entrega</p>
+              <div className="mt-1 grid grid-cols-3 gap-2">
+                {(Object.keys(PAY_ON_DELIVERY) as PayOnDelivery[]).map((k) => (
+                  <button key={k} onClick={() => setPay(k)} className={`rounded-xl border px-2 py-2.5 text-sm ${pay === k ? 'border-brand bg-brand-soft font-semibold text-brand-dark' : 'border-slate-200'}`}>
+                    {k === 'cartao' ? 'Cartão' : PAY_ON_DELIVERY[k]}
+                  </button>
+                ))}
+              </div>
+              {pay === 'dinheiro' && <input value={changeFor} onChange={(e) => setChangeFor(e.target.value)} inputMode="decimal" placeholder="Troco para quanto? (opcional)" className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-brand" />}
+            </div>
+          </div>
+        )}
         <label className="mt-2 block">
           <span className="text-sm font-medium text-ink">Observação (opcional)</span>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={200} placeholder="Ex.: sem gelo, bem batido" className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-brand" />
         </label>
-        <div className="mt-4 flex items-end justify-between">
-          <span className="text-sm text-ink-soft">Total com preço de membro</span>
-          <span className="text-2xl font-bold text-ink">{formatMoney(cart.total(true))}</span>
+        <div className="mt-4 flex items-end justify-between gap-3">
+          <span className="text-sm text-ink-soft">{fee > 0 ? `Produtos ${formatMoney(goods)} + entrega ${formatMoney(fee)}` : 'Total com preço de membro'}</span>
+          <span className="text-2xl font-bold text-ink">{formatMoney(goods + fee)}</span>
         </div>
-        <p className="mt-1 text-xs text-ink-soft">Você paga no caixa (Pix, cartão ou dinheiro) e o preparo começa na hora. Cashback pode ser usado no pagamento.</p>
+        <p className="mt-1 text-xs text-ink-soft">
+          {mode === 'entrega' ? 'A loja confirma, prepara e manda. Você paga ao entregador.' : 'Você paga no caixa (Pix, cartão ou dinheiro) e o preparo começa na hora. Cashback pode ser usado no pagamento.'}
+        </p>
         <ErrorLine error={m.error} />
-        <button disabled={m.isPending} onClick={() => m.mutate()} className="mt-3 w-full rounded-xl bg-brand py-3.5 text-base font-semibold text-white disabled:opacity-60">
-          {m.isPending ? 'Enviando…' : 'Fazer pedido · pagar no caixa'}
+        <button disabled={m.isPending || (mode === 'entrega' && (!addressId || belowMin))} onClick={() => m.mutate()} className="mt-3 w-full rounded-xl bg-brand py-3.5 text-base font-semibold text-white disabled:opacity-60">
+          {m.isPending ? 'Enviando…' : mode === 'entrega' ? 'Pedir entrega · pagar na entrega' : 'Fazer pedido · pagar no caixa'}
         </button>
         <button onClick={cart.clear} className="mt-2 w-full py-2 text-sm text-ink-soft">
           Esvaziar
@@ -373,7 +448,8 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
 }
 
 const STEPS: Array<Order['status']> = ['aguardando_pagamento', 'na_fila', 'preparando', 'pronto', 'entregue'];
-const STEP_LABEL: Record<string, string> = { aguardando_pagamento: 'Pagar', na_fila: 'Na fila', preparando: 'Preparo', pronto: 'Pronto', entregue: 'Entregue' };
+const DELIVERY_STEPS: Array<Order['status']> = ['aguardando_pagamento', 'na_fila', 'preparando', 'saiu_entrega', 'entregue'];
+const STEP_LABEL: Record<string, string> = { aguardando_pagamento: 'Pagar', na_fila: 'Na fila', preparando: 'Preparo', pronto: 'Pronto', saiu_entrega: 'A caminho', entregue: 'Entregue' };
 
 function OrderTrack({ me }: { me: ShopMe }) {
   const { id } = useParams();
@@ -393,23 +469,27 @@ function OrderTrack({ me }: { me: ShopMe }) {
   if (order.isLoading) return <Spinner />;
   const o = order.data;
   if (!o) return <ErrorLine error={order.error} />;
-  const step = STEPS.indexOf(o.status);
+  const steps = o.fulfillment === 'entrega' ? DELIVERY_STEPS : STEPS;
+  const step = steps.indexOf(o.status === 'pronto' && o.fulfillment === 'entrega' ? 'preparando' : o.status);
   return (
     <div className="space-y-4">
       <section className={`rounded-3xl p-6 text-center shadow-lg ${o.status === 'pronto' ? 'bg-brand-accent text-brand-dark' : o.status === 'cancelado' ? 'bg-slate-200 text-ink' : 'bg-gradient-to-br from-brand to-brand-dark text-white'}`}>
         <p className="text-sm font-semibold uppercase tracking-wider opacity-80">Pedido</p>
         <p className="text-7xl font-bold tabular-nums">{o.number}</p>
-        <p className="mt-2 text-xl font-bold">{ORDER_STATUS[o.status]}</p>
-        {o.status === 'aguardando_pagamento' && <p className="mt-1 text-sm opacity-90">Vá ao caixa e mostre seu cartão ({me.memberCode}) ou diga o número do pedido.</p>}
-        {o.status === 'pronto' && <p className="mt-1 text-sm font-medium">Pode retirar no balcão!</p>}
+        <p className="mt-2 text-xl font-bold">
+          {o.fulfillment === 'entrega' ? (o.status === 'aguardando_pagamento' ? 'A loja vai confirmar' : o.status === 'pronto' ? 'Pronto, saindo já' : o.status === 'saiu_entrega' ? 'A caminho! 🛵' : ORDER_STATUS[o.status]) : ORDER_STATUS[o.status]}
+        </p>
+        {o.fulfillment !== 'entrega' && o.status === 'aguardando_pagamento' && <p className="mt-1 text-sm opacity-90">Vá ao caixa e mostre seu cartão ({me.memberCode}) ou diga o número do pedido.</p>}
+        {o.fulfillment !== 'entrega' && o.status === 'pronto' && <p className="mt-1 text-sm font-medium">Pode retirar no balcão!</p>}
+        {o.fulfillment === 'entrega' && o.status !== 'cancelado' && o.status !== 'entregue' && <p className="mt-1 text-sm opacity-90">{o.paymentNote}</p>}
         {o.status === 'cancelado' && o.cancelReason && <p className="mt-1 text-sm">{o.cancelReason}</p>}
       </section>
       {o.status !== 'cancelado' && (
         <ol className="flex justify-between rounded-2xl bg-white p-4 text-center text-[11px] shadow-sm">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <li key={s} className={`flex-1 ${i <= step ? 'font-semibold text-brand' : 'text-ink-soft'}`}>
               <span className={`mx-auto mb-1 block h-2.5 w-2.5 rounded-full ${i <= step ? 'bg-brand' : 'bg-slate-300'}`} />
-              {STEP_LABEL[s]}
+              {o.fulfillment === 'entrega' && s === 'aguardando_pagamento' ? 'Confirmar' : STEP_LABEL[s]}
             </li>
           ))}
         </ol>
@@ -422,6 +502,7 @@ function OrderTrack({ me }: { me: ShopMe }) {
           </p>
         ))}
         {o.notes && <p className="mt-1 text-ink-soft">Obs.: {o.notes}</p>}
+        {o.address && <p className="mt-1 text-ink-soft">🛵 {addressLine(o.address)}{o.deliveryFee > 0 ? ` · entrega ${formatMoney(o.deliveryFee)}` : ' · entrega grátis'}</p>}
         <p className="mt-2 border-t border-slate-100 pt-2 font-semibold">
           {o.saleId ? 'Pago' : 'Estimado'}: {formatMoney(o.estimate)}
         </p>
@@ -745,6 +826,7 @@ function Account({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void
         </button>
       </form>
       <ChangePin onToken={onToken} />
+      {info.data?.delivery.enabled && <Addresses />}
       {club && (
         <section className="rounded-2xl bg-white p-5 text-sm text-ink shadow-sm">
           <h2 className="mb-2 font-bold">Regras do clube</h2>
@@ -920,6 +1002,69 @@ function Repurchase({ onAdd }: { onAdd?: (p: ShopProduct) => void }) {
           <ProductCard key={r.product.id} p={r.product} onAdd={onAdd} />
         ))}
       </div>
+    </section>
+  );
+}
+
+function AddressForm({ zones, onSaved, onCancel }: { zones: Array<{ id: string; name: string }>; onSaved: (list: CustomerAddress[]) => void; onCancel?: () => void }) {
+  const [f, setF] = useState({ label: '', street: '', number: '', complement: '', zoneId: zones[0]?.id ?? '', reference: '' });
+  const m = useMutation({ mutationFn: () => shopApi<CustomerAddress[]>('/me/addresses', { method: 'POST', json: { ...f, label: f.label || null, complement: f.complement || null, reference: f.reference || null } }), onSuccess: onSaved });
+  const input = 'w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand';
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+      <p className="text-sm font-semibold text-ink">Endereço da entrega</p>
+      <input className={input} placeholder="Rua / avenida" value={f.street} onChange={(e) => setF({ ...f, street: e.target.value })} />
+      <div className="grid grid-cols-3 gap-2">
+        <input className={input} placeholder="Nº" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} />
+        <input className={`${input} col-span-2`} placeholder="Apto, bloco (opcional)" value={f.complement} onChange={(e) => setF({ ...f, complement: e.target.value })} />
+      </div>
+      <select className={`${input} bg-white`} value={f.zoneId} onChange={(e) => setF({ ...f, zoneId: e.target.value })}>
+        {zones.map((z) => (
+          <option key={z.id} value={z.id}>
+            {z.name}
+          </option>
+        ))}
+      </select>
+      <input className={input} placeholder="Ponto de referência (opcional)" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
+      <input className={input} placeholder="Nome do endereço: Casa, Trabalho (opcional)" value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} />
+      <p className="text-xs text-ink-soft">Seu bairro não está na lista? Ainda não entregamos nele.</p>
+      <ErrorLine error={m.error} />
+      <div className="flex gap-2">
+        <button className="flex-1 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white disabled:opacity-60" disabled={m.isPending} onClick={() => m.mutate()}>
+          Salvar endereço
+        </button>
+        {onCancel && (
+          <button className="rounded-xl border border-slate-300 px-4 text-sm" onClick={onCancel}>
+            Voltar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Addresses() {
+  const qc = useQueryClient();
+  const list = useQuery({ queryKey: ['shop', 'addresses'], queryFn: () => shopApi<CustomerAddress[]>('/me/addresses') });
+  const remove = useMutation({ mutationFn: (id: string) => shopApi<CustomerAddress[]>(`/me/addresses/${id}`, { method: 'DELETE' }), onSuccess: (l) => qc.setQueryData(['shop', 'addresses'], l) });
+  if (!list.data?.length) return null;
+  return (
+    <section className="rounded-2xl bg-white p-5 text-sm shadow-sm">
+      <h2 className="mb-2 font-bold">Meus endereços</h2>
+      <ul className="space-y-2">
+        {list.data.map((a) => (
+          <li key={a.id} className="flex items-start justify-between gap-3">
+            <span>
+              {a.label && <b>{a.label} · </b>}
+              {a.street}, {a.number}
+              {a.complement ? ` (${a.complement})` : ''} — {a.zoneName}
+            </span>
+            <button className="text-xs text-red-600" onClick={() => remove.mutate(a.id)}>
+              Apagar
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { normalizePhone } from './br';
 import { saleLineSchema, type ChosenOption } from './sales';
 import type { ProductKind, Unit } from './products';
+import type { DeliveryAddress } from './delivery';
 
 /**
  * Pedido (Fase 2b). Nasce no app (cliente logada), no totem ou no balcão.
@@ -15,6 +16,7 @@ export const ORDER_STATUS = {
   na_fila: 'Na fila',
   preparando: 'Preparando',
   pronto: 'Pronto para retirar',
+  saiu_entrega: 'Saiu para entrega',
   entregue: 'Entregue',
   cancelado: 'Cancelado',
 } as const;
@@ -38,8 +40,21 @@ const notes = z
   .nullish()
   .transform((v) => v || null);
 
-/** Pedido da cliente logada no app. */
-export const shopOrderSchema = z.object({ items, notes });
+/** Pedido da cliente logada no app: retirada na loja ou entrega (paga na entrega). */
+export const shopOrderSchema = z
+  .object({
+    items,
+    notes,
+    fulfillment: z.enum(['retirada', 'entrega']).default('retirada'),
+    addressId: z.string().uuid().nullish(),
+    payOnDelivery: z.enum(['pix', 'cartao', 'dinheiro']).nullish(),
+    /** Dinheiro: troco para quanto. */
+    changeFor: z.preprocess((v) => (v === '' || v == null ? null : typeof v === 'string' ? Number(v.replace(/\./g, '').replace(',', '.')) : v), z.number().min(0).max(10_000).nullable()).default(null),
+  })
+  .superRefine((o, ctx) => {
+    if (o.fulfillment === 'entrega' && !o.addressId) ctx.addIssue({ code: 'custom', message: 'Escolha o endereço da entrega', path: ['addressId'] });
+    if (o.fulfillment === 'entrega' && !o.payOnDelivery) ctx.addIssue({ code: 'custom', message: 'Diga como vai pagar na entrega', path: ['payOnDelivery'] });
+  });
 export type ShopOrderInput = z.infer<typeof shopOrderSchema>;
 
 /** Pedido no totem: sem login; nome para chamar e, se for membro, o celular ou o código do cartão. */
@@ -96,6 +111,13 @@ export interface Order {
   /** Valor estimado no pedido (o caixa recalcula ao cobrar). */
   estimate: number;
   notes: string | null;
+  fulfillment: 'retirada' | 'entrega';
+  address: DeliveryAddress | null;
+  zoneName: string | null;
+  deliveryFee: number;
+  paymentNote: string | null;
+  courier: { id: string; name: string } | null;
+  dispatchedAt: string | null;
   saleId: string | null;
   saleNumber: number | null;
   createdAt: string;

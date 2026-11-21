@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  addressSchema,
+  type AddressInput,
   shopOrderSchema,
   totemOrderSchema,
   type ShopOrderInput,
@@ -91,6 +93,34 @@ export class ShopController {
   async repurchase(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession) {
     await this.place(slug, s);
     return this.shop.repurchase(slug, s);
+  }
+
+  @Get('me/addresses')
+  @UseGuards(CustomerAuthGuard)
+  async addresses(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession) {
+    await this.place(slug, s);
+    return this.shop.addresses(s);
+  }
+
+  @Post('me/addresses')
+  @UseGuards(CustomerAuthGuard)
+  async addAddress(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession, @Body(new ZodValidationPipe(addressSchema)) body: AddressInput) {
+    await this.place(slug, s);
+    return this.shop.saveAddress(s, null, body);
+  }
+
+  @Put('me/addresses/:id')
+  @UseGuards(CustomerAuthGuard)
+  async updateAddress(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession, @Param('id', uuid) id: string, @Body(new ZodValidationPipe(addressSchema)) body: AddressInput) {
+    await this.place(slug, s);
+    return this.shop.saveAddress(s, id, body);
+  }
+
+  @Delete('me/addresses/:id')
+  @UseGuards(CustomerAuthGuard)
+  async deleteAddress(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession, @Param('id', uuid) id: string) {
+    await this.place(slug, s);
+    return this.shop.deleteAddress(s, id);
   }
 
   // ------------------------------------------------------------ pedidos

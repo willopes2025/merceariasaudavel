@@ -106,14 +106,16 @@ export class SalesService {
       async (tx) => {
         const session = await this.cash.lockOpenOf(tx, ctx, input.storeId);
         // Pedido do app/totem sendo cobrado: trava para ninguém cobrar duas vezes.
-        let order: { id: string; status: string; store_id: string; customer_id: string | null } | undefined;
+        let order: { id: string; status: string; store_id: string; customer_id: string | null; fulfillment: string; delivery_fee: Prisma.Decimal } | undefined;
         if (input.orderId) {
-          order = (await tx.$queryRaw<Array<{ id: string; status: string; store_id: string; customer_id: string | null }>>`
-            SELECT id, status, store_id, customer_id FROM "order" WHERE id = ${input.orderId} AND tenant_id = ${ctx.tenantId} FOR UPDATE`)[0];
+          order = (await tx.$queryRaw<Array<{ id: string; status: string; store_id: string; customer_id: string | null; fulfillment: string; delivery_fee: Prisma.Decimal }>>`
+            SELECT id, status, store_id, customer_id, fulfillment, delivery_fee FROM "order" WHERE id = ${input.orderId} AND tenant_id = ${ctx.tenantId} FOR UPDATE`)[0];
           if (!order) throw new NotFoundError('pedido', input.orderId);
           if (order.status !== 'aguardando_pagamento') throw new ConflictError('ORDER_NOT_PENDING', 'Esse pedido já foi cobrado ou cancelado.');
           if (order.store_id !== input.storeId) throw new DomainError('ORDER_OTHER_STORE', 'Esse pedido é de outra loja.');
         }
+        // Pedido com entrega: a taxa é a do pedido (bairro), não a digitada.
+        if (order) input = { ...input, deliveryFee: order.fulfillment === 'entrega' ? Number(order.delivery_fee) : 0 };
         const { quote, lines } = await this.compute(tx, ctx.tenantId, input, { lockCoupon: true });
         if (input.couponCode && quote.couponError) throw new DomainError('COUPON_INVALID', quote.couponError);
         const { change, error } = changeFor(quote.total, input.payments.map((p) => ({ amount: p.amount, kind: kindOf(p.methodId) })));
@@ -140,6 +142,7 @@ export class SalesService {
             couponDiscount: quote.coupon?.discount ?? 0,
             promoSavings: quote.promoSavings,
             campaignCashback: quote.campaignCashback,
+            deliveryFee: quote.deliveryFee,
             total: quote.total,
             cashbackUsed: quote.cashbackUsed,
             cashbackEarned: quote.cashbackEarned,
@@ -469,16 +472,19 @@ export class SalesService {
     const balance = cents(customer?.cashbackBalance);
     const cashbackAvailable = customer ? Math.min(balance, Math.floor((afterCoupon * rules.cashbackMaxUsePct) / 100)) : 0;
     const cashbackUsed = Math.min(cents(input.useCashback), cashbackAvailable);
-    const total = afterCoupon - cashbackUsed;
+    const fee = cents(input.deliveryFee ?? 0);
+    // A taxa de entrega soma no total, mas não gera cashback nem pode ser paga com ele.
+    const goodsPaid = afterCoupon - cashbackUsed;
+    const total = goodsPaid + fee;
     // Cashback turbinado: +% nas linhas da campanha (a maior, se houver mais de uma), sobre o que foi pago.
     let campaignCashback = 0;
-    if (member && total > 0 && subtotalCents > 0) {
+    if (member && goodsPaid > 0 && subtotalCents > 0) {
       const boosts = campaigns.filter((c) => c.type === 'cashback' && c.extraCashbackPct);
       const weighted = lines.reduce((sum, l) => {
         const pct = Math.max(0, ...boosts.filter((c) => lineInScope(c, l.productId, l.categoryId)).map((c) => c.extraCashbackPct!));
         return sum + cents(l.total) * pct;
       }, 0);
-      campaignCashback = Math.floor(((weighted / 100) * total) / subtotalCents);
+      campaignCashback = Math.floor(((weighted / 100) * goodsPaid) / subtotalCents);
     }
     const birthdayCoupon = !coupon ? await birthdaySuggestion(db as Tx, tenantId, customer) : null;
     const wouldSave = member
@@ -500,7 +506,8 @@ export class SalesService {
         cashbackUsed: cashbackUsed / 100,
         cashbackAvailable: cashbackAvailable / 100,
         total: total / 100,
-        cashbackEarned: member ? (earned(total, rules) + campaignCashback) / 100 : 0,
+        cashbackEarned: member ? (earned(goodsPaid, rules) + campaignCashback) / 100 : 0,
+        deliveryFee: fee / 100,
         wouldSaveAsMember: wouldSave / 100,
         promoSavings: lines.reduce((sum, l) => sum + cents(l.promoSavings), 0) / 100,
         coupon,
@@ -561,6 +568,7 @@ function toSale(s: SaleFull, doc: { id: string; status: string; number: string |
     couponDiscount: Number(s.couponDiscount),
     promoSavings: Number(s.promoSavings),
     campaignCashback: Number(s.campaignCashback),
+    deliveryFee: Number(s.deliveryFee),
     total: Number(s.total),
     change: changeNote ? Number(changeNote.replace(',', '.')) : paid > cents(s.total) ? (paid - cents(s.total)) / 100 : 0,
     payments: s.payments.map((p) => ({ id: p.id, methodName: p.method?.name ?? '—', kind: (p.method?.kind as PaymentKind | undefined) ?? null, amount: Number(p.amount), reversed: Boolean(p.reversal) })),

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { PERMISSIONS, orderAdvanceSchema, orderCancelSchema, type OrderAdvanceInput, type OrderCancelInput } from '@mercearia/contracts';
+import { PERMISSIONS, dispatchSchema, orderAdvanceSchema, orderCancelSchema, type DispatchInput, type OrderAdvanceInput, type OrderCancelInput } from '@mercearia/contracts';
 import { Ctx, RequiresPermission } from '../../common/auth/decorators';
 import type { RequestContext } from '../../common/tenancy/request-context';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
@@ -23,6 +23,19 @@ export class OrdersController {
   @RequiresPermission(PERMISSIONS.saleCreate)
   pending(@Ctx() ctx: RequestContext, @Query('storeId', uuid) storeId: string) {
     return this.orders.pending(ctx, storeId);
+  }
+
+  /** Tela de entregas. */
+  @Get('deliveries')
+  @RequiresPermission(PERMISSIONS.orderPrepare)
+  deliveries(@Ctx() ctx: RequestContext, @Query('storeId', uuid) storeId: string) {
+    return this.orders.deliveries(ctx, storeId);
+  }
+
+  @Post(':id/dispatch')
+  @RequiresPermission(PERMISSIONS.orderPrepare)
+  dispatch(@Ctx() ctx: RequestContext, @Param('id', uuid) id: string, @Body(new ZodValidationPipe(dispatchSchema)) body: DispatchInput) {
+    return this.orders.dispatch(ctx, id, body.courierId);
   }
 
   @Get(':id')

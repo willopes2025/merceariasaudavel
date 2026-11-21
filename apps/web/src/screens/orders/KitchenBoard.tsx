@@ -136,7 +136,7 @@ export function KitchenBoard() {
                           <p className="mt-1 font-semibold">{o.callName}</p>
                         </div>
                         <div className="text-right text-xs">
-                          <span className="badge bg-white">{ORDER_CHANNELS[o.channel]}</span>
+                          <span className="badge bg-white">{o.fulfillment === 'entrega' ? '🛵 Entrega' : ORDER_CHANNELS[o.channel]}</span>
                           <p className={`mt-1 font-medium ${late}`}>{waited === 0 ? 'agora' : `há ${waited} min`}</p>
                         </div>
                       </div>
@@ -149,13 +149,15 @@ export function KitchenBoard() {
                         ))}
                       </ul>
                       {o.notes && <p className="mt-2 rounded bg-amber-100 px-2 py-1 text-sm font-medium text-amber-900">Obs.: {o.notes}</p>}
-                      <button
-                        className="btn-primary mt-3 w-full py-3 text-base"
-                        disabled={advance.isPending}
-                        onClick={() => advance.mutate({ id: o.id, status: ORDER_NEXT[o.status]! })}
-                      >
-                        {col.action}
-                      </button>
+                      {o.fulfillment === 'entrega' && col.status === 'pronto' ? (
+                        <a href="/entregas" className="btn-primary mt-3 block w-full py-3 text-center text-base">
+                          Despachar (entregas)
+                        </a>
+                      ) : (
+                        <button className="btn-primary mt-3 w-full py-3 text-base" disabled={advance.isPending} onClick={() => advance.mutate({ id: o.id, status: ORDER_NEXT[o.status]! })}>
+                          {col.action}
+                        </button>
+                      )}
                       {col.status === 'na_fila' && (
                         <button className="mt-1 w-full text-xs text-ink-soft underline" onClick={() => advance.mutate({ id: o.id, status: 'pronto' })}>
                           Já está pronto

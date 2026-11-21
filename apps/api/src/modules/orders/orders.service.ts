@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import {
+  PAY_ON_DELIVERY,
+  mapsLink,
   memberLookupKey,
+  zoneFee,
+  type CourierRun,
+  type DeliveryAddress,
   type ChosenOption,
   type Order,
   type OrderAdvanceInput,
@@ -27,10 +32,19 @@ const UNPAID_HOURS = 3;
 const MAX_PENDING_PER_CUSTOMER = 3;
 
 const include = {
-  customer: { select: { name: true } },
-  sale: { select: { number: true } },
+  customer: { select: { name: true, phone: true } },
+  sale: { select: { number: true, total: true } },
+  courier: { select: { id: true, name: true } },
+  zone: { select: { name: true } },
 } satisfies Prisma.OrderInclude;
 type Row = Prisma.OrderGetPayload<{ include: typeof include }>;
+
+interface DeliveryPlan {
+  zoneId: string;
+  zone: { name: string; fee: number; minOrder: number; freeAbove: number | null };
+  address: DeliveryAddress;
+  paymentNote: string;
+}
 
 export interface ShopPlace {
   tenantId: string;
@@ -85,19 +99,20 @@ export class OrdersService {
     return toOrder(row);
   }
 
-  /** Anda um passo na tela de preparo (ou pula para pronto/entregue). */
+  /** Anda um passo na tela de preparo (ou pula para pronto/entregue). Entrega sai pelo despacho. */
   async advance(ctx: RequestContext, id: string, input: OrderAdvanceInput): Promise<Order> {
     const current = await this.get(ctx, id);
-    const order: OrderStatus[] = ['na_fila', 'preparando', 'pronto', 'entregue'];
+    const order: OrderStatus[] = current.fulfillment === 'entrega' ? ['na_fila', 'preparando', 'pronto', 'saiu_entrega', 'entregue'] : ['na_fila', 'preparando', 'pronto', 'entregue'];
     const from = order.indexOf(current.status);
     const to = order.indexOf(input.status);
     if (current.status === 'aguardando_pagamento') throw new ConflictError('ORDER_NOT_PAID', 'Esse pedido ainda não foi pago no caixa.');
     if (from < 0 || to <= from) throw new ConflictError('ORDER_STATUS', `O pedido já está "${current.status === 'cancelado' ? 'cancelado' : current.status}".`);
+    if (current.fulfillment === 'entrega' && input.status === 'entregue' && current.status !== 'saiu_entrega') throw new ConflictError('ORDER_NOT_DISPATCHED', 'Pedido de entrega: despache para o entregador antes.');
     const now = new Date();
     const data: Prisma.OrderUpdateInput = { status: input.status };
     if (to >= 1 && !current.startedAt) data.startedAt = now;
     if (to >= 2 && !current.readyAt) data.readyAt = now;
-    if (to >= 3) data.deliveredAt = now;
+    if (input.status === 'entregue') data.deliveredAt = now;
     // Só anda se ninguém andou antes (duas telas abertas).
     const changed = await this.prisma.order.updateMany({ where: { id, tenantId: ctx.tenantId, status: current.status }, data: data as Prisma.OrderUpdateManyMutationInput });
     if (!changed.count) throw new ConflictError('ORDER_CHANGED', 'Outra tela já mexeu nesse pedido. Atualize.');
@@ -114,6 +129,87 @@ export class OrdersService {
     return this.get(ctx, id);
   }
 
+  // ---------------------------------------------------------------- entrega
+
+  /** Tela de entregas: pedidos de entrega em andamento e os entregues hoje. */
+  async deliveries(ctx: RequestContext, storeId: string): Promise<Order[]> {
+    this.assertStore(ctx, storeId);
+    const since = new Date(Date.now() - 12 * 3_600_000);
+    const rows = await this.prisma.order.findMany({
+      where: { tenantId: ctx.tenantId, storeId, fulfillment: 'entrega', OR: [{ status: { in: ['aguardando_pagamento', 'na_fila', 'preparando', 'pronto', 'saiu_entrega'] }, createdAt: { gte: this.unpaidLimit() } }, { status: { in: ['na_fila', 'preparando', 'pronto', 'saiu_entrega'] } }, { status: 'entregue', deliveredAt: { gte: since } }] },
+      include,
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+    return rows.map(toOrder);
+  }
+
+  /** Entrega o pedido ao entregador: sai para entrega. */
+  async dispatch(ctx: RequestContext, id: string, courierId: string): Promise<Order> {
+    const current = await this.get(ctx, id);
+    if (current.fulfillment !== 'entrega') throw new DomainError('ORDER_NOT_DELIVERY', 'Esse pedido é para retirar na loja.');
+    if (!['na_fila', 'preparando', 'pronto'].includes(current.status)) throw new ConflictError('ORDER_STATUS', current.status === 'aguardando_pagamento' ? 'Registre o pedido no caixa antes de despachar.' : `O pedido já está "${current.status}".`);
+    const courier = await this.prisma.courier.findFirst({ where: { id: courierId, tenantId: ctx.tenantId, active: true } });
+    if (!courier) throw new DomainError('COURIER_NOT_FOUND', 'Entregador não encontrado.');
+    const now = new Date();
+    const changed = await this.prisma.order.updateMany({
+      where: { id, tenantId: ctx.tenantId, status: current.status },
+      data: { status: 'saiu_entrega', courierId: courier.id, dispatchedAt: now, ...(current.startedAt ? {} : { startedAt: now }), ...(current.readyAt ? {} : { readyAt: now }) },
+    });
+    if (!changed.count) throw new ConflictError('ORDER_CHANGED', 'Outra tela já mexeu nesse pedido. Atualize.');
+    await this.audit.record(ctx, 'order.dispatch', 'order', id, { number: current.number, courier: courier.name });
+    return this.get(ctx, id);
+  }
+
+  /** Página do entregador (pelo link): as entregas dele em rota e as que entregou nas últimas horas. */
+  async courierRun(token: string): Promise<CourierRun> {
+    const courier = await this.findCourier(token);
+    const store = await this.prisma.store.findFirst({ where: { tenantId: courier.tenantId, active: true }, orderBy: { createdAt: 'asc' }, select: { name: true } });
+    const since = new Date(Date.now() - 12 * 3_600_000);
+    const rows = await this.prisma.order.findMany({
+      where: { tenantId: courier.tenantId, courierId: courier.id, OR: [{ status: 'saiu_entrega' }, { status: 'entregue', deliveredAt: { gte: since } }] },
+      include,
+      orderBy: [{ status: 'desc' }, { dispatchedAt: 'asc' }],
+      take: 50,
+    });
+    return {
+      courierName: courier.name,
+      storeName: store?.name ?? '',
+      orders: rows.map((r) => {
+        const address = r.address as unknown as DeliveryAddress;
+        return {
+          id: r.id,
+          number: r.number,
+          status: r.status as 'saiu_entrega' | 'entregue',
+          customerName: r.customer?.name ?? r.callName,
+          phone: r.customer?.phone ?? null,
+          address,
+          mapsUrl: mapsLink(address),
+          toCollect: r.paymentNote ? Number(r.sale?.total ?? r.estimate) : 0,
+          paymentNote: r.paymentNote,
+          items: (r.items as unknown as OrderItem[]).map((i) => `${i.quantity}× ${i.description}${i.options?.length ? ` (${i.options.map((o) => o.name).join(', ')})` : ''}`),
+          notes: r.notes,
+          dispatchedAt: r.dispatchedAt?.toISOString() ?? null,
+          deliveredAt: r.deliveredAt?.toISOString() ?? null,
+        };
+      }),
+    };
+  }
+
+  async courierDelivered(token: string, orderId: string): Promise<CourierRun> {
+    const courier = await this.findCourier(token);
+    const changed = await this.prisma.order.updateMany({ where: { id: orderId, tenantId: courier.tenantId, courierId: courier.id, status: 'saiu_entrega' }, data: { status: 'entregue', deliveredAt: new Date() } });
+    if (!changed.count) throw new ConflictError('ORDER_STATUS', 'Esse pedido não está em rota com você.');
+    return this.courierRun(token);
+  }
+
+  private async findCourier(token: string) {
+    if (!/^[a-f0-9]{32}$/.test(token)) throw new NotFoundError('entregador');
+    const courier = await this.prisma.courier.findUnique({ where: { token } });
+    if (!courier || !courier.active) throw new NotFoundError('entregador');
+    return courier;
+  }
+
   // ---------------------------------------------------------------- app e totem
 
   async createFromApp(place: ShopPlace, customerId: string, input: ShopOrderInput): Promise<Order> {
@@ -122,7 +218,23 @@ export class OrdersService {
     if (!customer) throw new NotFoundError('cliente');
     const open = await this.prisma.order.count({ where: { tenantId: place.tenantId, customerId, status: 'aguardando_pagamento', createdAt: { gte: this.unpaidLimit() } } });
     if (open >= MAX_PENDING_PER_CUSTOMER) throw new DomainError('TOO_MANY_PENDING', 'Você já tem pedidos esperando pagamento. Pague no caixa ou cancele um antes de fazer outro.');
-    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes);
+    let delivery: DeliveryPlan | null = null;
+    if (input.fulfillment === 'entrega') {
+      const settings = await this.prisma.tenantSetting.findUnique({ where: { tenantId: place.tenantId }, select: { deliveryEnabled: true, deliveryCity: true } });
+      if (!settings?.deliveryEnabled) throw new DomainError('DELIVERY_OFF', 'A entrega pelo app está pausada agora. Escolha retirar na loja.');
+      const addr = await this.prisma.customerAddress.findFirst({ where: { id: input.addressId!, tenantId: place.tenantId, customerId }, include: { zone: true } });
+      if (!addr) throw new NotFoundError('endereço');
+      if (!addr.zone.active) throw new DomainError('ZONE_OFF', `Não estamos entregando em ${addr.zone.name} agora. Escolha retirar na loja.`);
+      const pay = input.payOnDelivery!;
+      const change = pay === 'dinheiro' && input.changeFor ? `, troco para R$ ${input.changeFor.toFixed(2).replace('.', ',')}` : '';
+      delivery = {
+        zoneId: addr.zone.id,
+        zone: { name: addr.zone.name, fee: Number(addr.zone.fee), minOrder: Number(addr.zone.minOrder), freeAbove: addr.zone.freeAbove == null ? null : Number(addr.zone.freeAbove) },
+        address: { street: addr.street, number: addr.number, complement: addr.complement, neighborhood: addr.zone.name, reference: addr.reference, city: settings.deliveryCity },
+        paymentNote: `${PAY_ON_DELIVERY[pay]} na entrega${change}`,
+      };
+    }
+    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery);
   }
 
   async createFromTotem(place: ShopPlace, input: TotemOrderInput): Promise<Order> {
@@ -160,7 +272,7 @@ export class OrdersService {
     if (!place.storeId) return { preparing: [], ready: [] };
     const since = new Date(Date.now() - 6 * 3_600_000);
     const rows = await this.prisma.order.findMany({
-      where: { tenantId: place.tenantId, storeId: place.storeId, status: { in: ACTIVE }, paidAt: { gte: since } },
+      where: { tenantId: place.tenantId, storeId: place.storeId, fulfillment: 'retirada', status: { in: ACTIVE }, paidAt: { gte: since } },
       select: { number: true, callName: true, status: true },
       orderBy: [{ readyAt: 'desc' }, { paidAt: 'asc' }],
       take: 60,
@@ -184,9 +296,15 @@ export class OrdersService {
 
   // ---------------------------------------------------------------- apoio
 
-  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null): Promise<Order> {
+  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null): Promise<Order> {
     // Mesma conta do caixa (preço de membro, montagem, regras): erro aqui = erro no caixa.
-    const quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode: null });
+    let quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode: null, deliveryFee: 0 });
+    let fee = 0;
+    if (delivery) {
+      if (quote.total < delivery.zone.minOrder) throw new DomainError('DELIVERY_MIN_ORDER', `Para entregar em ${delivery.zone.name} o pedido mínimo é R$ ${delivery.zone.minOrder.toFixed(2).replace('.', ',')}.`);
+      fee = zoneFee(delivery.zone, quote.total);
+      if (fee > 0) quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode: null, deliveryFee: fee });
+    }
     const kinds = await this.prisma.product.findMany({ where: { tenantId, id: { in: items.map((i) => i.productId) } }, select: { id: true, kind: true, unit: true, showInApp: true } });
     const hidden = kinds.find((k) => !k.showInApp || k.kind === 'insumo');
     if (hidden) throw new DomainError('PRODUCT_NOT_AVAILABLE', 'Um dos produtos não está disponível para pedido.');
@@ -204,6 +322,9 @@ export class OrdersService {
           items: lines as unknown as Prisma.InputJsonValue,
           estimate: quote.total,
           notes,
+          ...(delivery
+            ? { fulfillment: 'entrega', address: delivery.address as unknown as Prisma.InputJsonValue, zoneId: delivery.zoneId, deliveryFee: fee, paymentNote: delivery.paymentNote }
+            : {}),
         },
       });
       return created.id;
@@ -248,6 +369,13 @@ export function toOrder(r: Row): Order {
     items,
     estimate: Number(r.estimate),
     notes: r.notes,
+    fulfillment: r.fulfillment as Order['fulfillment'],
+    address: (r.address as unknown as DeliveryAddress | null) ?? null,
+    zoneName: r.zone?.name ?? null,
+    deliveryFee: Number(r.deliveryFee),
+    paymentNote: r.paymentNote,
+    courier: r.courier ? { id: r.courier.id, name: r.courier.name } : null,
+    dispatchedAt: r.dispatchedAt?.toISOString() ?? null,
     saleId: r.saleId,
     saleNumber: r.sale?.number ?? null,
     createdAt: r.createdAt.toISOString(),

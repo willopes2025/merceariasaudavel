@@ -20,6 +20,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { GrowthModule } from './modules/growth/growth.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PurchasingModule } from './modules/purchasing/purchasing.module';
 import { ShopModule } from './modules/shop/shop.module';
@@ -53,6 +54,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     CampaignsModule,
     GrowthModule,
     PurchasingModule,
+    DeliveryModule,
   ],
   controllers: [HealthController],
   providers: [

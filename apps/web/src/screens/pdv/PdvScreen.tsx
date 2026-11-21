@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   PAYMENT_KINDS,
+  addressLine,
   changeFor,
   customerSchema,
   formatPhone,
@@ -83,7 +84,7 @@ export function PdvScreen() {
   });
 
   const items = lines.map((l) => ({ productId: l.product.id, quantity: l.quantity, options: l.options }));
-  const quoteBody = { storeId, customerId: customer?.id ?? null, items, discount: toNumber(discount), useCashback: useCashback ? 1_000_000 : 0, couponCode: coupon.trim() || null };
+  const quoteBody = { storeId, customerId: customer?.id ?? null, items, discount: toNumber(discount), useCashback: useCashback ? 1_000_000 : 0, couponCode: coupon.trim() || null, deliveryFee: order?.fulfillment === 'entrega' ? order.deliveryFee : 0 };
   const quote = useQuery({
     queryKey: ['sale-quote', JSON.stringify(quoteBody)],
     queryFn: () => api<SaleQuote>('/sales/quote', { method: 'POST', json: quoteBody }),
@@ -200,6 +201,11 @@ export function PdvScreen() {
         <div className="card mb-4 flex items-center justify-between gap-3 border-brand p-3 text-sm">
           <span>
             Cobrando o <b>pedido nº {order.number}</b> ({order.callName}, pelo {order.channel === 'app' ? 'app' : 'totem'}). Ao finalizar, ele vai para a tela de preparo.
+            {order.fulfillment === 'entrega' && order.address && (
+              <span className="mt-1 block">
+                🛵 Entrega em {addressLine(order.address)} · <b>{order.paymentNote}</b> (o entregador recebe)
+              </span>
+            )}
             {order.notes && <span className="ml-2 text-ink-soft">Obs.: {order.notes}</span>}
           </span>
           <button className="text-xs text-ink-soft underline" onClick={reset}>
@@ -288,6 +294,7 @@ export function PdvScreen() {
             <div className="card space-y-2 p-4 text-sm">
               <Row label="Produtos" value={formatMoney(q?.grossTotal ?? 0)} />
               {(q?.memberSavings ?? 0) > 0 && <Row label="Preço de membro" value={`− ${formatMoney(q!.memberSavings)}`} className="text-brand" />}
+              {(q?.deliveryFee ?? 0) > 0 && <Row label="Entrega" value={`+ ${formatMoney(q!.deliveryFee)}`} />}
               {(q?.promoSavings ?? 0) > 0 && <Row label="Ofertas" value={`− ${formatMoney(q!.promoSavings)}`} className="text-amber-700" />}
               {q?.birthdayCoupon && !coupon && (
                 <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -688,6 +695,7 @@ function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order
                   <p className="font-semibold">
                     Nº {o.number} · {o.callName}
                     <span className="badge ml-2 bg-slate-100 text-ink-soft">{o.channel === 'app' ? 'App' : 'Totem'}</span>
+                    {o.fulfillment === 'entrega' && <span className="badge ml-1 bg-sky-100 text-sky-800">🛵 Entrega</span>}
                     {o.customerId && <span className="badge ml-1 bg-brand-soft text-brand">Membro</span>}
                   </p>
                   <p className="text-xs text-ink-soft">Pedido às {new Date(o.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · estimado {formatMoney(o.estimate)}</p>
@@ -705,6 +713,7 @@ function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order
                 ))}
               </ul>
               {o.notes && <p className="mt-1 text-xs text-ink-soft">Obs.: {o.notes}</p>}
+              {o.address && <p className="mt-1 text-xs">{addressLine(o.address)} · {o.paymentNote}</p>}
               <button
                 className="mt-2 text-xs text-red-600 hover:underline"
                 disabled={cancel.isPending}
