@@ -26,6 +26,7 @@ import { ConflictError, DomainError, NotFoundError } from '../../common/errors/d
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { clubRules } from '../customers/cashback';
 import { ensureMemberCode } from '../customers/member-code';
+import { loadOptionGroups } from '../products/options';
 import type { CustomerSession } from './customer-auth';
 
 const LOCK_AFTER = 5;
@@ -95,8 +96,8 @@ export class ShopService {
 
   async info(slug: string): Promise<ShopInfo> {
     const t = await this.tenant(slug);
-    const club = await clubRules(this.prisma, t.tenantId);
-    return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club };
+    const [club, settings] = await Promise.all([clubRules(this.prisma, t.tenantId), this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true } })]);
+    return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club, ordersEnabled: Boolean(t.storeId) && (settings?.ordersEnabled ?? true) };
   }
 
   async catalog(slug: string): Promise<ShopCatalog> {
@@ -113,6 +114,7 @@ export class ShopService {
         ? await this.prisma.stockBalance.findMany({ where: { tenantId: t.tenantId, storeId: t.stockStoreId, productId: { in: tracked } } })
         : [];
     const stock = new Map(balances.map((b) => [b.productId, Number(b.quantity)]));
+    const groups = await loadOptionGroups(this.prisma, t.tenantId, products.map((p) => p.id));
     const categories = new Map<string, string>();
     const items: ShopProduct[] = products.map((p) => {
       if (p.category?.active) categories.set(p.category.id, p.category.name);
@@ -130,6 +132,7 @@ export class ShopService {
         price,
         memberPrice: member,
         available: !p.trackStock || p.kind === 'preparado' || (stock.get(p.id) ?? 0) > 0,
+        optionGroups: groups.get(p.id) ?? [],
       };
     });
     return {

@@ -224,6 +224,8 @@ export interface ProductDetail extends Product {
   recipe: RecipeLine[];
   /** Insumo: em quais preparados ele entra. */
   usedIn: Array<{ productId: string; name: string; quantity: number }>;
+  /** Montagem (sabor, adicionais). */
+  optionGroups: OptionGroupView[];
 }
 
 const lotFields = {
@@ -290,6 +292,8 @@ export interface ProductOption {
   /** Saldo na loja do caixa (null = não controla). */
   stock: number | null;
   categoryName: string | null;
+  /** Tem montagem (sabor, adicionais): o caixa abre a escolha antes de pôr no carrinho. */
+  optionGroups: OptionGroupView[];
 }
 
 export const categorySchema = z.object({
@@ -317,4 +321,71 @@ export interface ExpiringLot extends Omit<StockLot, "daysLeft"> {
 /** Preço que vale para a venda: membro paga o preço de membro quando existe. */
 export function priceFor(p: { price: number; memberPrice: number | null }, member: boolean): number {
   return member && p.memberPrice != null && p.memberPrice < p.price ? p.memberPrice : p.price;
+}
+
+// ------------------------------------------------------------ montagem
+
+/**
+ * Montagem do produto (shake, sorvete…): grupos como "Sabor" (escolhe 1) e
+ * "Adicionais" (até 3). Cada opção pode custar a mais e gastar um insumo.
+ */
+export interface OptionChoice {
+  id: string;
+  name: string;
+  /** Somado ao preço do item. */
+  price: number;
+  supplyId: string | null;
+  supplyName: string | null;
+  supplyUnit: Unit | null;
+  supplyQty: number | null;
+}
+
+export interface OptionGroupView {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  options: OptionChoice[];
+}
+
+const optionMoney = z
+  .preprocess((v) => parseNumber(v) ?? 0, z.number({ invalid_type_error: 'Valor inválido' }).min(0, 'Não pode ser negativo').max(10_000))
+  .transform((v) => Math.round(v * 100) / 100);
+
+export const optionGroupsSchema = z.object({
+  groups: z
+    .array(
+      z
+        .object({
+          id: z.string().uuid().nullish(),
+          name: z.string().trim().min(1, 'Dê um nome ao grupo (ex.: Sabor)').max(60),
+          minSelect: z.coerce.number().int().min(0).max(20),
+          maxSelect: z.coerce.number().int().min(1, 'Pelo menos 1 escolha').max(20),
+          options: z
+            .array(
+              z
+                .object({
+                  id: z.string().uuid().nullish(),
+                  name: z.string().trim().min(1, 'Dê um nome à opção').max(60),
+                  price: optionMoney,
+                  supplyId: z.string().uuid().nullish().transform((v) => v ?? null),
+                  supplyQty: z
+                    .preprocess((v) => (v === '' || v == null ? null : parseNumber(v)), z.number().positive('Quantidade do insumo maior que zero').max(100_000).nullable())
+                    .transform((v) => (v == null ? null : Math.round(v * 1000) / 1000)),
+                })
+                .refine((o) => (o.supplyId == null) === (o.supplyQty == null), { message: 'Informe o insumo e a quantidade juntos', path: ['supplyQty'] }),
+            )
+            .min(1, 'Coloque pelo menos uma opção no grupo')
+            .max(40),
+        })
+        .refine((g) => g.maxSelect >= g.minSelect, { message: 'O máximo não pode ser menor que o mínimo', path: ['maxSelect'] })
+        .refine((g) => g.minSelect <= g.options.length, { message: 'O mínimo é maior que o número de opções', path: ['minSelect'] }),
+    )
+    .max(10),
+});
+export type OptionGroupsInput = z.infer<typeof optionGroupsSchema>;
+
+/** Texto curto das escolhas: "Morango, + Pasta de amendoim". */
+export function optionsLabel(options: Array<{ name: string }>): string {
+  return options.map((o) => o.name).join(', ');
 }

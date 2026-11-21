@@ -39,7 +39,7 @@ export const NAV: NavGroup[] = [
       { label: 'Vendas', path: '/vendas', phase: 0, permission: 'sale.create' },
       { label: 'Abrir e fechar caixa', path: '/caixa', phase: 0, permission: 'cash.operate' },
       { label: 'App e cardápio', path: '/app-cardapio', phase: 0, permission: 'customer.view' },
-      { label: 'Pedido no totem', path: '/totem', phase: 2, description: 'A cliente monta o shake ou o sorvete no totem ou no app, paga sozinha e o pedido vai para a tela de preparo.' },
+      { label: 'Pagamento no app e no totem', path: '/pagamento-online', phase: 2, description: 'Pix e cartão direto no app e no totem: o pedido já chega pago na tela de preparo, sem passar no caixa.' },
       { label: 'Loja online', path: '/loja-online', phase: 2, description: 'Site de vendas ligado ao mesmo estoque, com frete, retirada na loja e recuperação de carrinho pelo WhatsApp.' },
       { label: 'Marketplaces e iFood', path: '/marketplaces', phase: 2, description: 'Mercado Livre, Shopee, Amazon, iFood e 99Food com estoque e preço sincronizados e os pedidos caindo na mesma central.' },
     ],
@@ -48,6 +48,7 @@ export const NAV: NavGroup[] = [
     key: 'operar',
     label: 'Operar',
     items: [
+      { label: 'Tela de preparo', path: '/preparo', phase: 0, permission: 'order.prepare' },
       { label: 'Produtos', path: '/produtos', phase: 0, permission: 'stock.view' },
       { label: 'Estoque', path: '/estoque', phase: 0, permission: 'stock.view' },
       { label: 'Validades', path: '/validades', phase: 0, permission: 'stock.view' },

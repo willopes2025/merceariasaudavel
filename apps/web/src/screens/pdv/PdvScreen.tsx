@@ -8,7 +8,9 @@ import {
   formatPhone,
   parseNumber,
   type CashSession,
+  type Customer,
   type CustomerOption,
+  type Order,
   type PaymentMethod,
   type ProductOption,
   type Sale,
@@ -16,12 +18,16 @@ import {
   type Store,
 } from '@mercearia/contracts';
 import { api, can, session } from '../../lib/api';
-import { ErrorBox, Field, Loading } from '../../components/ui';
+import { Drawer, ErrorBox, Field, Loading } from '../../components/ui';
+import { OptionPicker } from '../../components/OptionPicker';
 import { formatMoney, formatQty } from '../../components/format';
 
 interface Line {
   product: ProductOption;
   quantity: number;
+  /** Montagem escolhida (ids) e os nomes para mostrar. */
+  options: string[];
+  optionNames: string[];
 }
 interface Payment {
   methodId: string;
@@ -63,9 +69,19 @@ export function PdvScreen() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [cpf, setCpf] = useState('');
   const [weighing, setWeighing] = useState<ProductOption | null>(null);
+  const [picking, setPicking] = useState<ProductOption | null>(null);
   const [done, setDone] = useState<Sale | null>(null);
+  /** Pedido do app/totem sendo cobrado. */
+  const [order, setOrder] = useState<Order | null>(null);
+  const [showOrders, setShowOrders] = useState(false);
+  const pending = useQuery({
+    queryKey: ['orders-pending', storeId],
+    queryFn: () => api<Order[]>(`/orders/pending?storeId=${storeId}`),
+    enabled: Boolean(storeId) && can('sale.create'),
+    refetchInterval: 15_000,
+  });
 
-  const items = lines.map((l) => ({ productId: l.product.id, quantity: l.quantity }));
+  const items = lines.map((l) => ({ productId: l.product.id, quantity: l.quantity, options: l.options }));
   const quoteBody = { storeId, customerId: customer?.id ?? null, items, discount: toNumber(discount), useCashback: useCashback ? 1_000_000 : 0 };
   const quote = useQuery({
     queryKey: ['sale-quote', JSON.stringify(quoteBody)],
@@ -84,15 +100,44 @@ export function PdvScreen() {
   const check = changeFor(total, paid);
   const remaining = Math.max(0, (cents(total) - paid.reduce((s, p) => s + cents(p.amount), 0)) / 100);
 
-  function add(product: ProductOption, quantity: number) {
+  function add(product: ProductOption, quantity: number, options: string[] = [], optionNames: string[] = []) {
+    const key = options.join(',');
     setLines((ls) => {
-      const i = ls.findIndex((l) => l.product.id === product.id && !product.soldByWeight);
+      const i = ls.findIndex((l) => l.product.id === product.id && !product.soldByWeight && l.options.join(',') === key);
       if (i >= 0) return ls.map((l, n) => (n === i ? { ...l, quantity: l.quantity + quantity } : l));
-      return [...ls, { product, quantity }];
+      return [...ls, { product, quantity, options, optionNames }];
     });
     setPayments([]);
   }
+  function pick(p: ProductOption) {
+    if (p.optionGroups?.length) return setPicking(p);
+    if (p.soldByWeight || WEIGHT.includes(p.unit)) return setWeighing(p);
+    add(p, 1);
+  }
+  /** Puxa o pedido do app/totem para o caixa: itens, montagem e cliente. */
+  async function charge(o: Order) {
+    reset();
+    setOrder(o);
+    setShowOrders(false);
+    setLines(
+      o.items.map((i) => ({
+        product: { id: i.productId, name: i.description, kind: i.kind, barcode: null, sku: null, unit: i.unit, soldByWeight: WEIGHT.includes(i.unit), price: 0, memberPrice: null, trackStock: false, stock: null, categoryName: null, optionGroups: [] },
+        quantity: i.quantity,
+        options: i.options.map((x) => x.id),
+        optionNames: i.options.map((x) => x.name),
+      })),
+    );
+    if (o.customerId) {
+      try {
+        const c = await api<Customer>(`/customers/${o.customerId}`);
+        setCustomer({ id: c.id, name: c.name, phone: c.phone, document: c.document, isMember: c.isMember, cashbackBalance: c.cashbackBalance });
+      } catch {
+        /* sem permissão de ver clientes: o caixa busca na mão */
+      }
+    }
+  }
   function reset() {
+    setOrder(null);
     setLines([]);
     setCustomer(null);
     setDiscount('');
@@ -105,7 +150,7 @@ export function PdvScreen() {
     mutationFn: () =>
       api<Sale>('/sales', {
         method: 'POST',
-        json: { ...quoteBody, channel: 'loja', payments: payments.filter((p) => toNumber(p.amount) > 0).map((p) => ({ methodId: p.methodId, amount: toNumber(p.amount) })), cpf: cpf || null, emitNfce: true },
+        json: { ...quoteBody, channel: order?.channel === 'app' ? 'app' : 'loja', orderId: order?.id ?? null, payments: payments.filter((p) => toNumber(p.amount) > 0).map((p) => ({ methodId: p.methodId, amount: toNumber(p.amount) })), cpf: cpf || null, emitNfce: true },
       }),
     onSuccess: (sale) => {
       setDone(sale);
@@ -114,6 +159,7 @@ export function PdvScreen() {
       client.invalidateQueries({ queryKey: ['cash-current'] });
       client.invalidateQueries({ queryKey: ['sales'] });
       client.invalidateQueries({ queryKey: ['pdv-lookup'] });
+      client.invalidateQueries({ queryKey: ['orders-pending'] });
     },
   });
 
@@ -135,6 +181,11 @@ export function PdvScreen() {
             </select>
           )}
         </div>
+        {cash.data && can('sale.create') && (
+          <button className={`btn-ghost ${pending.data?.length ? 'border-brand text-brand' : ''}`} onClick={() => setShowOrders(true)}>
+            Pedidos para cobrar{pending.data?.length ? ` (${pending.data.length})` : ''}
+          </button>
+        )}
         {cash.data && (
           <Link to="/caixa" className="text-sm text-ink-soft hover:text-ink">
             Caixa aberto às {new Date(cash.data.openedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · vendas {cash.data.sales.count} · {formatMoney(cash.data.sales.total)}
@@ -143,13 +194,25 @@ export function PdvScreen() {
       </div>
 
       {done && <SaleDone sale={done} onClose={() => setDone(null)} />}
+      {order && (
+        <div className="card mb-4 flex items-center justify-between gap-3 border-brand p-3 text-sm">
+          <span>
+            Cobrando o <b>pedido nº {order.number}</b> ({order.callName}, pelo {order.channel === 'app' ? 'app' : 'totem'}). Ao finalizar, ele vai para a tela de preparo.
+            {order.notes && <span className="ml-2 text-ink-soft">Obs.: {order.notes}</span>}
+          </span>
+          <button className="text-xs text-ink-soft underline" onClick={reset}>
+            Soltar o pedido
+          </button>
+        </div>
+      )}
+      {showOrders && <PendingOrders orders={pending.data ?? []} onClose={() => setShowOrders(false)} onCharge={charge} onChanged={() => pending.refetch()} />}
 
       {!cash.data ? (
         <OpenCash storeId={storeId} onOpened={() => client.invalidateQueries({ queryKey: ['cash-current'] })} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
           <section className="space-y-4">
-            <ProductSearch key={`p${round}`} storeId={storeId} onPick={(p) => (p.soldByWeight || WEIGHT.includes(p.unit) ? setWeighing(p) : add(p, 1))} />
+            <ProductSearch key={`p${round}`} storeId={storeId} onPick={pick} />
             <div className="card overflow-x-auto">
               {!lines.length ? (
                 <p className="py-16 text-center text-sm text-ink-soft">Passe o código de barras ou busque o produto pelo nome.</p>
@@ -172,6 +235,7 @@ export function PdvScreen() {
                         <tr key={`${l.product.id}-${i}`}>
                           <td>
                             <span className="font-medium">{l.product.name}</span>
+                            {l.optionNames.length > 0 && <div className="text-xs text-ink-soft">{l.optionNames.join(', ')}</div>}
                             {line && line.unitPrice < line.listPrice && <span className="badge ml-2 bg-brand-soft text-brand">Preço de membro</span>}
                             {line?.stockWarning && <div className="text-xs text-amber-700">Estoque: {line.stockWarning}</div>}
                           </td>
@@ -285,13 +349,26 @@ export function PdvScreen() {
         </div>
       )}
 
+      {picking && (
+        <OptionPicker
+          title={picking.name}
+          groups={picking.optionGroups}
+          basePrice={picking.price}
+          memberPrice={customer?.isMember ? picking.memberPrice : null}
+          onClose={() => setPicking(null)}
+          onConfirm={(picked, qty) => {
+            add(picking, qty, picked.ids, picked.names);
+            setPicking(null);
+          }}
+        />
+      )}
       {weighing && (
         <WeightDialog
           product={weighing}
           initial={lines.find((l) => l.product.id === weighing.id)?.quantity}
           onClose={() => setWeighing(null)}
           onConfirm={(q) => {
-            setLines((ls) => (ls.some((l) => l.product.id === weighing.id) ? ls.map((l) => (l.product.id === weighing.id ? { ...l, quantity: q } : l)) : [...ls, { product: weighing, quantity: q }]));
+            setLines((ls) => (ls.some((l) => l.product.id === weighing.id) ? ls.map((l) => (l.product.id === weighing.id ? { ...l, quantity: q } : l)) : [...ls, { product: weighing, quantity: q, options: [], optionNames: [] }]));
             setPayments([]);
             setWeighing(null);
           }}
@@ -548,6 +625,7 @@ function SaleDone({ sale, onClose }: { sale: Sale; onClose: () => void }) {
           {sale.memberSavings > 0 && <span>Economia de membro {formatMoney(sale.memberSavings)}</span>}
         </p>
         {nota && <p className={`text-sm ${nota.tone}`}>{nota.text}</p>}
+        {sale.order && <p className="text-sm font-medium">Pedido nº {sale.order.number} foi para a tela de preparo.</p>}
       </div>
       <div className="flex gap-2">
         {sale.fiscal?.danfeUrl && (
@@ -563,5 +641,60 @@ function SaleDone({ sale, onClose }: { sale: Sale; onClose: () => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/** Pedidos do app e do totem esperando a cliente pagar no caixa. */
+function PendingOrders({ orders, onClose, onCharge, onChanged }: { orders: Order[]; onClose: () => void; onCharge: (o: Order) => void; onChanged: () => void }) {
+  const cancel = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => api(`/orders/${id}/cancel`, { method: 'POST', json: { reason } }),
+    onSuccess: onChanged,
+  });
+  return (
+    <Drawer title="Pedidos para cobrar" onClose={onClose}>
+      {!orders.length ? (
+        <p className="py-10 text-center text-sm text-ink-soft">Nenhum pedido do app ou do totem esperando pagamento.</p>
+      ) : (
+        <ul className="space-y-3">
+          {orders.map((o) => (
+            <li key={o.id} className="rounded-xl border border-slate-200 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">
+                    Nº {o.number} · {o.callName}
+                    <span className="badge ml-2 bg-slate-100 text-ink-soft">{o.channel === 'app' ? 'App' : 'Totem'}</span>
+                    {o.customerId && <span className="badge ml-1 bg-brand-soft text-brand">Membro</span>}
+                  </p>
+                  <p className="text-xs text-ink-soft">Pedido às {new Date(o.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · estimado {formatMoney(o.estimate)}</p>
+                </div>
+                <button className="btn-primary px-3 py-1.5" onClick={() => onCharge(o)}>
+                  Cobrar
+                </button>
+              </div>
+              <ul className="mt-2 text-sm">
+                {o.items.map((i, n) => (
+                  <li key={n}>
+                    {i.unit === 'UN' ? i.quantity : formatQty(i.quantity, i.unit)} × {i.description}
+                    {i.options.length > 0 && <span className="text-ink-soft"> ({i.options.map((x) => x.name).join(', ')})</span>}
+                  </li>
+                ))}
+              </ul>
+              {o.notes && <p className="mt-1 text-xs text-ink-soft">Obs.: {o.notes}</p>}
+              <button
+                className="mt-2 text-xs text-red-600 hover:underline"
+                disabled={cancel.isPending}
+                onClick={() => {
+                  const reason = window.prompt(`Cancelar o pedido nº ${o.number}? Diga o motivo:`, 'Não veio pagar');
+                  if (reason && reason.trim().length >= 3) cancel.mutate({ id: o.id, reason: reason.trim() });
+                }}
+              >
+                Cancelar pedido
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {cancel.error && <ErrorBox error={cancel.error} />}
+    </Drawer>
   );
 }

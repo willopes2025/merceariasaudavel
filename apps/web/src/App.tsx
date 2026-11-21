@@ -41,6 +41,8 @@ const TvScreensScreen = screen(() => import('./screens/management/ManagementScre
 const TvPage = screen(() => import('./screens/management/TvPage'), (m) => m.TvPage);
 const CustomerApp = screen(() => import('./shop/CustomerApp'), (m) => m.CustomerApp);
 const MenuPage = screen(() => import('./shop/MenuPage'), (m) => m.MenuPage);
+const KitchenBoard = screen(() => import('./screens/orders/KitchenBoard'), (m) => m.KitchenBoard);
+const PickupPage = screen(() => import('./shop/PickupPage'), (m) => m.PickupPage);
 const AppLinksScreen = screen(() => import('./screens/shop/AppLinksScreen'), (m) => m.AppLinksScreen);
 const PdvScreen = screen(() => import('./screens/pdv/PdvScreen'), (m) => m.PdvScreen);
 const SalesScreen = screen(() => import('./screens/sales/SalesScreen'), (m) => m.SalesScreen);
@@ -95,6 +97,13 @@ export function App() {
       </Suspense>
     );
   }
+  if (path === '/retirada' || path === '/retirada/') {
+    return (
+      <Suspense fallback={null}>
+        <PickupPage />
+      </Suspense>
+    );
+  }
   if (path === '/cardapio' || path === '/cardapio/') {
     return (
       <Suspense fallback={null}>
@@ -118,6 +127,7 @@ export function App() {
             <Route path="vendas/:id" element={<SaleScreen />} />
             <Route path="caixa" element={<CashScreen />} />
             <Route path="app-cardapio" element={<AppLinksScreen />} />
+            <Route path="preparo" element={<KitchenBoard />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
             <Route path="validades" element={<ExpiringScreen />} />

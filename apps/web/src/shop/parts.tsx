@@ -33,7 +33,7 @@ function unitLabel(p: ShopProduct) {
   return p.soldByWeight ? '/kg' : p.unit !== 'UN' ? `/${p.unit.toLowerCase()}` : '';
 }
 
-export function ProductCard({ p, big }: { p: ShopProduct; big?: boolean }) {
+export function ProductCard({ p, big, onAdd }: { p: ShopProduct; big?: boolean; onAdd?: (p: ShopProduct) => void }) {
   const off = saving(p);
   const pctOff = off > 0 ? Math.round((off / p.price) * 100) : 0;
   const [broken, setBroken] = useState(false);
@@ -54,6 +54,7 @@ export function ProductCard({ p, big }: { p: ShopProduct; big?: boolean }) {
         <h3 className={`${big ? 'text-base' : 'text-sm'} font-semibold leading-snug text-ink`}>{p.name}</h3>
         {p.brand && <p className="text-xs text-ink-soft">{p.brand}</p>}
         {p.description && big && <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{p.description}</p>}
+        {p.optionGroups.length > 0 && <p className="mt-1 text-[11px] font-medium text-brand">Monte do seu jeito</p>}
         <div className="mt-auto pt-2">
           {off > 0 ? (
             <>
@@ -73,6 +74,11 @@ export function ProductCard({ p, big }: { p: ShopProduct; big?: boolean }) {
             </p>
           )}
         </div>
+        {onAdd && p.available && (
+          <button onClick={() => onAdd(p)} className={`mt-2 w-full rounded-xl bg-brand ${big ? 'py-3 text-base' : 'py-2 text-sm'} font-semibold text-white active:scale-[0.98]`}>
+            {p.optionGroups.length ? 'Escolher' : 'Adicionar'}
+          </button>
+        )}
       </div>
     </article>
   );
@@ -85,7 +91,7 @@ const fold = (s: string) =>
     .toLowerCase();
 
 /** Busca + categorias + grade de produtos (usada no app e no cardápio). */
-export function Catalog({ data, big, header }: { data: ShopCatalog; big?: boolean; header?: ReactNode }) {
+export function Catalog({ data, big, header, onAdd }: { data: ShopCatalog; big?: boolean; header?: ReactNode; onAdd?: (p: ShopProduct) => void }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
   const [onlyOffers, setOnlyOffers] = useState(false);
@@ -129,7 +135,7 @@ export function Catalog({ data, big, header }: { data: ShopCatalog; big?: boolea
       ) : (
         <div className={`mt-2 grid gap-3 ${big ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
           {list.map((p) => (
-            <ProductCard key={p.id} p={p} big={big} />
+            <ProductCard key={p.id} p={p} big={big} onAdd={onAdd} />
           ))}
         </div>
       )}

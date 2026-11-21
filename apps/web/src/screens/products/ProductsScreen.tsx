@@ -6,6 +6,7 @@ import {
   STOCK_MOVEMENT_TYPES,
   UNITS,
   productSchema,
+  optionGroupsSchema,
   recipeSchema,
   stockMoveSchema,
   stockStores,
@@ -346,6 +347,7 @@ function ProductDrawer({ id, onClose, onEdit, onChanged }: { id: string; onClose
   const stores = useStores();
   const [move, setMove] = useState<MoveType | null>(null);
   const [recipe, setRecipe] = useState(false);
+  const [options, setOptions] = useState(false);
   const p = product.data;
   const refresh = () => {
     client.invalidateQueries({ queryKey: ['product', id] });
@@ -461,6 +463,37 @@ function ProductDrawer({ id, onClose, onEdit, onChanged }: { id: string; onClose
                 )}
               </section>
             )
+          )}
+
+          {p.kind !== 'insumo' && (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="font-medium">Montagem (sabor, adicionais)</h3>
+                {can('product.manage') && !options && (
+                  <button className="text-sm text-brand" onClick={() => setOptions(true)}>
+                    {p.optionGroups.length ? 'Editar montagem' : 'Montar opções'}
+                  </button>
+                )}
+              </div>
+              {options ? (
+                <OptionsForm product={p} onClose={() => setOptions(false)} onDone={() => { setOptions(false); refresh(); }} />
+              ) : !p.optionGroups.length ? (
+                <p className="text-sm text-ink-soft">Sem montagem: vende do jeito que está. Use para sabor do shake, cobertura do sorvete, adicionais pagos.</p>
+              ) : (
+                <div className="space-y-2 text-sm">
+                  {p.optionGroups.map((g) => (
+                    <div key={g.id}>
+                      <p className="font-medium">
+                        {g.name} <span className="text-xs font-normal text-ink-soft">({g.minSelect > 0 ? `obrigatório, ${g.minSelect === g.maxSelect ? g.maxSelect : `${g.minSelect} a ${g.maxSelect}`}` : `opcional, até ${g.maxSelect}`})</span>
+                      </p>
+                      <p className="text-ink-soft">
+                        {g.options.map((o) => `${o.name}${o.price > 0 ? ` +${formatMoney(o.price)}` : ''}${o.supplyName ? ` (gasta ${formatQty(o.supplyQty ?? 0, o.supplyUnit ?? 'UN')} de ${o.supplyName})` : ''}`).join(' · ')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {p.usedIn.length > 0 && (
@@ -655,6 +688,125 @@ function RecipeForm({ product, onClose, onDone }: { product: ProductDetail; onCl
           }}
         >
           Salvar ficha
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface OptionDraft {
+  id: string | null;
+  name: string;
+  price: string;
+  supplyId: string;
+  supplyQty: string;
+}
+interface GroupDraft {
+  id: string | null;
+  name: string;
+  minSelect: string;
+  maxSelect: string;
+  options: OptionDraft[];
+}
+
+/**
+ * Montagem: grupos como "Sabor" (obrigatório, escolhe 1) e "Adicionais"
+ * (opcional, até 3). Cada opção pode custar a mais e gastar um insumo.
+ */
+function OptionsForm({ product, onClose, onDone }: { product: ProductDetail; onClose: () => void; onDone: () => void }) {
+  const [groups, setGroups] = useState<GroupDraft[]>(() =>
+    product.optionGroups.length
+      ? product.optionGroups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          minSelect: String(g.minSelect),
+          maxSelect: String(g.maxSelect),
+          options: g.options.map((o) => ({ id: o.id, name: o.name, price: o.price ? String(o.price).replace('.', ',') : '', supplyId: o.supplyId ?? '', supplyQty: o.supplyQty != null ? String(o.supplyQty).replace('.', ',') : '' })),
+        }))
+      : [{ id: null, name: 'Sabor', minSelect: '1', maxSelect: '1', options: [{ id: null, name: '', price: '', supplyId: '', supplyQty: '' }] }],
+  );
+  const [error, setError] = useState<unknown>(null);
+  const supplies = useQuery({ queryKey: ['option-supplies'], queryFn: () => api<Page<Product>>('/products?kind=insumo&pageSize=200') });
+  const resale = useQuery({ queryKey: ['option-resale'], queryFn: () => api<Page<Product>>('/products?kind=revenda&pageSize=200') });
+  const supplyList = [...(supplies.data?.items ?? []), ...(resale.data?.items ?? [])].filter((x) => x.id !== product.id);
+  const save = useMutation({ mutationFn: (body: unknown) => api(`/products/${product.id}/options`, { method: 'PUT', json: body }), onSuccess: onDone, onError: setError });
+  const setGroup = (gi: number, patch: Partial<GroupDraft>) => setGroups((gs) => gs.map((g, i) => (i === gi ? { ...g, ...patch } : g)));
+  const setOption = (gi: number, oi: number, patch: Partial<OptionDraft>) => setGroups((gs) => gs.map((g, i) => (i === gi ? { ...g, options: g.options.map((o, k) => (k === oi ? { ...o, ...patch } : o)) } : g)));
+  return (
+    <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs text-ink-soft">
+        Mínimo 1 e máximo 1 = escolha obrigatória de uma (sabor). Mínimo 0 e máximo 3 = até três adicionais. Preço extra soma no item (membro e não membro pagam igual o adicional). O insumo sai do estoque a cada item vendido com a opção.
+      </p>
+      {groups.map((g, gi) => (
+        <div key={gi} className="space-y-2 rounded-lg bg-white p-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex-1 text-xs">
+              Grupo
+              <input className="input" value={g.name} onChange={(e) => setGroup(gi, { name: e.target.value })} placeholder="Sabor, Cobertura, Adicionais…" />
+            </label>
+            <label className="w-20 text-xs">
+              Mínimo
+              <input className="input text-center" inputMode="numeric" value={g.minSelect} onChange={(e) => setGroup(gi, { minSelect: e.target.value })} />
+            </label>
+            <label className="w-20 text-xs">
+              Máximo
+              <input className="input text-center" inputMode="numeric" value={g.maxSelect} onChange={(e) => setGroup(gi, { maxSelect: e.target.value })} />
+            </label>
+            <button className="pb-2 text-xs text-red-600" onClick={() => setGroups((gs) => gs.filter((_, i) => i !== gi))}>
+              Tirar grupo
+            </button>
+          </div>
+          {g.options.map((o, oi) => (
+            <div key={oi} className="grid grid-cols-12 items-center gap-2">
+              <input className="input col-span-4" value={o.name} onChange={(e) => setOption(gi, oi, { name: e.target.value })} placeholder="Opção (ex.: Morango)" />
+              <input className="input col-span-2 text-right" inputMode="decimal" value={o.price} onChange={(e) => setOption(gi, oi, { price: e.target.value })} placeholder="+ R$ 0" />
+              <select className="input col-span-3" value={o.supplyId} onChange={(e) => setOption(gi, oi, { supplyId: e.target.value, supplyQty: e.target.value ? o.supplyQty : '' })}>
+                <option value="">Sem insumo</option>
+                {supplyList.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name} ({x.unit.toLowerCase()})
+                  </option>
+                ))}
+              </select>
+              <input className="input col-span-2 text-right" inputMode="decimal" disabled={!o.supplyId} value={o.supplyQty} onChange={(e) => setOption(gi, oi, { supplyQty: e.target.value })} placeholder="qtd." />
+              <button className="col-span-1 text-xs text-red-600" onClick={() => setGroup(gi, { options: g.options.filter((_, k) => k !== oi) })} aria-label="Tirar opção">
+                ✕
+              </button>
+            </div>
+          ))}
+          <button className="text-sm text-brand" onClick={() => setGroup(gi, { options: [...g.options, { id: null, name: '', price: '', supplyId: '', supplyQty: '' }] })}>
+            + opção
+          </button>
+        </div>
+      ))}
+      <button className="btn-ghost" onClick={() => setGroups((gs) => [...gs, { id: null, name: gs.length ? 'Adicionais' : 'Sabor', minSelect: gs.length ? '0' : '1', maxSelect: gs.length ? '3' : '1', options: [{ id: null, name: '', price: '', supplyId: '', supplyQty: '' }] }])}>
+        + grupo
+      </button>
+      <ErrorBox error={error} />
+      <div className="flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose}>
+          Cancelar
+        </button>
+        <button
+          className="btn-primary"
+          disabled={save.isPending}
+          onClick={() => {
+            const body = {
+              groups: groups.map((g) => ({
+                id: g.id,
+                name: g.name,
+                minSelect: g.minSelect,
+                maxSelect: g.maxSelect,
+                options: g.options.filter((o) => o.name.trim()).map((o) => ({ id: o.id, name: o.name, price: o.price || 0, supplyId: o.supplyId || null, supplyQty: o.supplyId ? o.supplyQty : null })),
+              })),
+            };
+            const parsed = optionGroupsSchema.safeParse(body);
+            if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+            setError(null);
+            save.mutate(parsed.data);
+          }}
+        >
+          Salvar montagem
         </button>
       </div>
     </div>

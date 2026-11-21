@@ -1,6 +1,10 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  shopOrderSchema,
+  totemOrderSchema,
+  type ShopOrderInput,
+  type TotemOrderInput,
   shopLoginSchema,
   shopPinSchema,
   shopProfileSchema,
@@ -13,7 +17,10 @@ import {
 import { Public } from '../../common/auth/decorators';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { CurrentCustomer, CustomerAuthGuard, type CustomerSession } from './customer-auth';
+import { OrdersService } from '../orders/orders.service';
 import { ShopService } from './shop.service';
+
+const uuid = new ParseUUIDPipe();
 
 /**
  * App do cliente e cardápio: /v1/shop/:slug/...
@@ -23,7 +30,10 @@ import { ShopService } from './shop.service';
 @Public()
 @Controller('shop/:slug')
 export class ShopController {
-  constructor(private readonly shop: ShopService) {}
+  constructor(
+    private readonly shop: ShopService,
+    private readonly orders: OrdersService,
+  ) {}
 
   @Get()
   info(@Param('slug') slug: string) {
@@ -73,5 +83,53 @@ export class ShopController {
   @UseGuards(CustomerAuthGuard)
   purchases(@CurrentCustomer() s: CustomerSession) {
     return this.shop.purchases(s);
+  }
+
+  // ------------------------------------------------------------ pedidos
+
+  /** Pedido da cliente logada: paga no caixa e vai para o preparo. */
+  @Post('me/orders')
+  @UseGuards(CustomerAuthGuard)
+  async order(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession, @Body(new ZodValidationPipe(shopOrderSchema)) body: ShopOrderInput) {
+    return this.orders.createFromApp(await this.place(slug, s), s.customerId, body);
+  }
+
+  @Get('me/orders')
+  @UseGuards(CustomerAuthGuard)
+  async myOrders(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession) {
+    return this.orders.mine(await this.place(slug, s), s.customerId);
+  }
+
+  @Get('me/orders/:id')
+  @UseGuards(CustomerAuthGuard)
+  async myOrder(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession, @Param('id', uuid) id: string) {
+    return this.orders.mineOne(await this.place(slug, s), s.customerId, id);
+  }
+
+  @Post('me/orders/:id/cancel')
+  @UseGuards(CustomerAuthGuard)
+  async cancelMine(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession, @Param('id', uuid) id: string) {
+    return this.orders.cancelMine(await this.place(slug, s), s.customerId, id);
+  }
+
+  /** Totem da loja: pedido sem login (nome para chamar; membro pelo celular ou cartão). */
+  @Post('totem/orders')
+  async totemOrder(@Param('slug') slug: string, @Body(new ZodValidationPipe(totemOrderSchema)) body: TotemOrderInput) {
+    const t = await this.shop.tenant(slug);
+    return this.orders.createFromTotem({ tenantId: t.tenantId, storeId: t.storeId }, body);
+  }
+
+  /** Painel de retirada (TV): só número e primeiro nome. */
+  @Get('pickup')
+  async pickup(@Param('slug') slug: string) {
+    const t = await this.shop.tenant(slug);
+    return this.orders.pickup({ tenantId: t.tenantId, storeId: t.storeId });
+  }
+
+  /** A loja do endereço tem que ser a mesma do token da cliente. */
+  private async place(slug: string, s: CustomerSession) {
+    const t = await this.shop.tenant(slug);
+    if (t.tenantId !== s.tenantId) throw new UnauthorizedException('Sessão de outra loja: entre de novo');
+    return { tenantId: t.tenantId, storeId: t.storeId };
   }
 }

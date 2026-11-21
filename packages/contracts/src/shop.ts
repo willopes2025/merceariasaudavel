@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isValidCpf, normalizePhone, onlyDigits } from './br';
 import { CUSTOMER_GOALS, type CustomerGoal } from './customers';
-import type { Unit } from './products';
+import type { OptionGroupView, Unit } from './products';
 
 /**
  * App do cliente (Fase 2a). Ser membro = ter o app: o cliente se cadastra com
@@ -96,6 +96,8 @@ export interface ShopInfo {
   phone: string | null;
   address: string | null;
   club: { cashbackPct: number; cashbackDays: number; cashbackMaxUsePct: number };
+  /** App e totem aceitam pedido (paga no caixa). */
+  ordersEnabled: boolean;
 }
 
 export interface ShopProduct {
@@ -112,6 +114,8 @@ export interface ShopProduct {
   memberPrice: number;
   /** Tem no estoque (preparados sempre têm). */
   available: boolean;
+  /** Montagem (sabor, adicionais) para pedir pelo app/totem. */
+  optionGroups: OptionGroupView[];
 }
 
 export interface ShopCatalog {

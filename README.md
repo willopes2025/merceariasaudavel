@@ -38,6 +38,19 @@ Proposta e arquitetura completa: apresentação "Mercearia Saudável · Arquitet
   ou PIN esquecido). Tela **Vender › App e cardápio** com os QR para imprimir.
 - Produto ganhou descrição, foto (link) e "aparece no app".
 
+## Fase 2b — montagem, pedidos e tela de preparo
+
+- **Montagem do produto** (Produtos › produto › Montagem): grupos como Sabor
+  (obrigatório, escolhe 1) e Adicionais (até N), cada opção com preço extra e
+  insumo que baixa do estoque. Vale no caixa, no app e no totem; a nota sai com as escolhas.
+- **Pedido pelo app** (cliente logada) e **pelo totem** (`/cardapio?totem=1`, nome
+  para chamar + celular/cartão se for membro): paga no caixa em **Pedidos para cobrar**.
+- **Tela de preparo** (`/preparo`): na fila → preparando → pronto → entregue,
+  com bip de pedido novo. Venda no balcão com shake/sorvete entra sozinha na fila.
+- **TV de retirada** (`/retirada`): números preparando e prontos, só primeiro nome.
+- Configurações › Clube: liga/desliga pedidos do app/totem e o envio do balcão para o preparo.
+- Pedido não pago em 3 h é cancelado sozinho.
+
 ## Estrutura
 
 ```

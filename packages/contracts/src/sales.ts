@@ -21,8 +21,16 @@ export const SALE_CHANNELS = {
 } as const;
 export type SaleChannel = keyof typeof SALE_CHANNELS;
 
+/** Uma linha: produto, quantidade e as opções da montagem (ids). */
+export const saleLineSchema = z.object({
+  productId: z.string().uuid('Produto inválido'),
+  quantity: quantity(),
+  options: z.array(z.string().uuid()).max(30).default([]),
+});
+export type SaleLineInput = z.infer<typeof saleLineSchema>;
+
 const lines = z
-  .array(z.object({ productId: z.string().uuid('Produto inválido'), quantity: quantity() }))
+  .array(saleLineSchema)
   .min(1, 'Coloque pelo menos um produto')
   .max(300);
 
@@ -50,13 +58,25 @@ export const saleCreateSchema = saleQuoteSchema.extend({
     .refine((v) => v === null || v.length === 11 || v.length === 14, 'CPF ou CNPJ inválido'),
   /** Emitir a NFC-e agora (quando a loja tem nota configurada). */
   emitNfce: z.boolean().default(true),
+  /** Pedido do app/totem que está sendo cobrado. */
+  orderId: z.string().uuid().nullish(),
   notes: z.string().trim().max(300).nullish(),
 });
 export type SaleCreateInput = z.infer<typeof saleCreateSchema>;
 
+/** Escolha da montagem gravada na venda. */
+export interface ChosenOption {
+  id: string;
+  group: string;
+  name: string;
+  price: number;
+}
+
 export interface SaleQuoteLine {
   productId: string;
+  /** Nome do produto (as escolhas vêm em options). */
   description: string;
+  options: ChosenOption[];
   kind: ProductKind;
   unit: Unit;
   quantity: number;
@@ -107,7 +127,9 @@ export interface Sale {
   customerName: string | null;
   memberPricing: boolean;
   sellerName: string | null;
-  items: Array<{ productId: string; description: string; unit: Unit; quantity: number; listPrice: number; unitPrice: number; total: number }>;
+  items: Array<{ productId: string; description: string; options: ChosenOption[]; unit: Unit; quantity: number; listPrice: number; unitPrice: number; total: number }>;
+  /** Pedido ligado a esta venda (app, totem ou tela de preparo). */
+  order: { id: string; number: number; status: string } | null;
   grossTotal: number;
   memberSavings: number;
   discount: number;

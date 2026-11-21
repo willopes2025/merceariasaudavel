@@ -22,7 +22,7 @@ describe('menu da Mercearia', () => {
 
   it('nenhum item da equipe usa os endereços públicos do cliente', () => {
     const paths = NAV.flatMap((g) => g.items.map((i) => i.path));
-    expect(paths.filter((p) => p === '/app' || p.startsWith('/app/') || p.startsWith('/cardapio') || p.startsWith('/tv/'))).toEqual([]);
+    expect(paths.filter((p) => p === '/app' || p.startsWith('/app/') || p.startsWith('/cardapio') || p.startsWith('/retirada') || p.startsWith('/tv/'))).toEqual([]);
   });
 
   it('não repete caminho', () => {

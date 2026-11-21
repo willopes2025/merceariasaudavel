@@ -8,17 +8,17 @@ import { Empty, ErrorBox, Field, Loading, PageHeader } from '../../components/ui
 export function ClubScreen() {
   const client = useQueryClient();
   const club = useQuery({ queryKey: ['club'], queryFn: () => api<ClubSettings>('/club') });
-  const [f, setF] = useState({ cashbackPct: '', cashbackDays: '', cashbackMaxUsePct: '' });
+  const [f, setF] = useState({ cashbackPct: '', cashbackDays: '', cashbackMaxUsePct: '', ordersEnabled: true, kitchenFromCounter: true });
   const [error, setError] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (club.data) setF({ cashbackPct: String(club.data.cashbackPct).replace('.', ','), cashbackDays: String(club.data.cashbackDays), cashbackMaxUsePct: String(club.data.cashbackMaxUsePct).replace('.', ',') });
+    if (club.data) setF({ cashbackPct: String(club.data.cashbackPct).replace('.', ','), cashbackDays: String(club.data.cashbackDays), cashbackMaxUsePct: String(club.data.cashbackMaxUsePct).replace('.', ','), ordersEnabled: club.data.ordersEnabled, kitchenFromCounter: club.data.kitchenFromCounter });
   }, [club.data]);
   const save = useMutation({ mutationFn: (body: unknown) => api('/club', { method: 'PUT', json: body }), onSuccess: () => { setSaved(true); client.invalidateQueries({ queryKey: ['club'] }); }, onError: setError });
   if (club.isLoading) return <Loading />;
   return (
     <div className="max-w-xl">
-      <PageHeader title="Clube e cashback" subtitle="Ser membro é grátis: basta o cadastro com celular (no caixa ou, na Fase 2, instalando o app). Membro paga o preço de membro e junta cashback." />
+      <PageHeader title="Clube, cashback e pedidos" subtitle="Ser membro é grátis: cadastro com celular no caixa ou pelo app. Membro paga o preço de membro e junta cashback." />
       <form
         className="card space-y-4 p-6"
         onSubmit={(e) => {
@@ -39,6 +39,17 @@ export function ClubScreen() {
         <Field label="Até quanto da compra pode ser pago com cashback (%)">
           <input className="input" inputMode="decimal" value={f.cashbackMaxUsePct} onChange={(e) => setF({ ...f, cashbackMaxUsePct: e.target.value })} />
         </Field>
+        <div className="space-y-2 border-t border-slate-100 pt-4 text-sm">
+          <p className="font-medium">Pedidos e tela de preparo</p>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={f.ordersEnabled} onChange={(e) => setF({ ...f, ordersEnabled: e.target.checked })} />
+            <span>App e totem aceitam pedido (a cliente paga no caixa). Desligue em dia de movimento fora do normal.</span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={f.kitchenFromCounter} onChange={(e) => setF({ ...f, kitchenFromCounter: e.target.checked })} />
+            <span>Venda no balcão com shake ou sorvete vai para a tela de preparo.</span>
+          </label>
+        </div>
         <ErrorBox error={error} />
         {saved && <p className="text-sm text-brand">Regras salvas.</p>}
         <button className="btn-primary w-full" disabled={save.isPending}>

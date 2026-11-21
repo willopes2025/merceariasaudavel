@@ -22,7 +22,14 @@ const LINKS = [
     title: 'Totem / tablet da loja',
     path: '/cardapio?totem=1',
     where: 'Tablet ou TV de toque no salão (navegador em tela cheia).',
-    how: 'Letras grandes, QR para virar membro sempre à vista e volta ao começo depois de 90 segundos sem toque.',
+    how: 'A cliente monta o shake ou o sorvete, põe o nome (e o celular, se for membro) e paga no caixa. Letras grandes; volta ao começo depois de 90 segundos sem toque.',
+  },
+  {
+    key: 'retirada',
+    title: 'TV de retirada',
+    path: '/retirada',
+    where: 'TV perto do balcão (navegador em tela cheia).',
+    how: 'Mostra os números preparando e prontos, só com o primeiro nome. Toca um aviso quando fica pronto (toque uma vez na tela para liberar o som).',
   },
 ] as const;
 
@@ -50,7 +57,7 @@ export function AppLinksScreen() {
           </button>
         }
       />
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {LINKS.map((l) => {
           const url = `${origin}${l.path}`;
           return (
@@ -78,6 +85,8 @@ export function AppLinksScreen() {
           <li>No PDV, busque a cliente pelo celular, CPF ou pelo código de 6 letras do cartão do app: o preço de membro entra na hora.</li>
           <li>Cliente que já comprava na loja e quer o app: abra a ficha dela em Clientes e toque em <b className="text-ink">Liberar app (gerar código)</b>. Ela entra com o celular + esse código e cria o PIN.</li>
           <li>Esqueceu o PIN? Mesmo caminho: <b className="text-ink">Gerar código novo</b>.</li>
+          <li>Pedido do app e do totem aparece no PDV em <b className="text-ink">Pedidos para cobrar</b>: toque em Cobrar, receba e ele vai para a <b className="text-ink">Tela de preparo</b>.</li>
+          <li>Shake e sorvete com sabor e adicionais: monte em Produtos › (produto) › Montagem. Adicional pode custar a mais e baixar insumo.</li>
           <li>Para o produto aparecer bonito no app, preencha descrição e foto no cadastro do produto. Insumos nunca aparecem.</li>
         </ul>
       </section>

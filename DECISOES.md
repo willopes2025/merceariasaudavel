@@ -29,6 +29,18 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - O saldo de cashback só muda pelo extrato (`moveCashback`); extrato não se altera nem se apaga.
 - Venda cancelada: devolve o cashback usado e tira o ganho (só o que sobrou, se ela já gastou).
 
+## Pedidos e preparo (Fase 2b)
+- Pedido do app/totem **paga no caixa** (sem gateway por enquanto). O caixa recalcula na hora de cobrar;
+  o valor do pedido é só estimativa. Cobrar trava o pedido (`FOR UPDATE`): ninguém cobra duas vezes.
+- Pedido pago entra na fila; andar só para a frente (`na_fila → preparando → pronto → entregue`), e só
+  se ninguém mexeu antes (duas telas abertas).
+- Venda no balcão com preparado abre pedido já pago (configurável). Cancelar a venda cancela o pedido.
+- Número do pedido volta a 1 todo dia (`tenant_sequence` com nome `order:AAAA-MM-DD`).
+- Adicional da montagem custa igual para membro e não membro; insumo da opção baixa como `consumo`.
+- Opção removida da montagem some; venda feita guarda nome e preço das escolhas (`sale_item.options`).
+- Totem identifica membro por celular ou código do cartão, sem PIN (só dá o preço de membro, que é grátis).
+- Painel de retirada é público: só número e primeiro nome.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

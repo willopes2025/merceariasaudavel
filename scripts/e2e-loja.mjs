@@ -276,7 +276,9 @@ await check('meta do mês, painel do dia e tela de TV pública sem dado de clien
   tv = ok(await call('/tv-screens', { token: owner, method: 'POST', body: { storeId: store.id, name: 'TV do balcão', mode: 'equipe' } }), 201);
   const pub = ok(await call(`/tv/${tv.path.split('/').pop()}`));
   assert.equal(pub.storeName, store.name);
-  assert.ok(pub.offers.some((o) => o.name === whey.name && o.memberPrice === 169.9));
+  // As maiores economias de membro: o whey aparece, ou só há ofertas ainda maiores na frente dele.
+  const wheyPct = Math.round((1 - 169.9 / 189.9) * 100);
+  assert.ok(pub.offers.length > 0 && (pub.offers.some((o) => o.name === whey.name && o.memberPrice === 169.9) || pub.offers.every((o) => o.savingPct >= wheyPct)));
   assert.ok(!JSON.stringify(pub).includes(member.name), 'TV não mostra cliente');
   const rotated = ok(await call(`/tv-screens/${tv.id}/rotate`, { token: owner, method: 'POST', body: { storeId: store.id, name: 'TV do balcão', mode: 'equipe' } }), 201);
   assert.equal((await call(`/tv/${tv.path.split('/').pop()}`)).status, 404, 'link antigo para de funcionar');

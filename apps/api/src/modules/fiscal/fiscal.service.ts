@@ -185,7 +185,7 @@ export class FiscalService {
     // Desconto do caixa e cashback usado entram como desconto, repartido entre os itens.
     const discounts = spread(sale.items.map((i) => Number(i.total)), Number(sale.discount) + Number(sale.cashbackUsed));
     const draft: NfceDraft = draftNfce(
-      sale.items.map((i, n) => ({ description: i.description, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), discount: discounts[n]!, product: byId.get(i.productId) ?? null })),
+      sale.items.map((i, n) => ({ description: withOptions(i.description, i.options), quantity: Number(i.quantity), unitPrice: Number(i.unitPrice), discount: discounts[n]!, product: byId.get(i.productId) ?? null })),
       movements.map((m) => ({ kind: m.method?.kind ?? 'outro', amount: Number(m.amount) })),
       setup.defaultNcm,
     );
@@ -340,4 +340,10 @@ export function spread(totals: number[], discount: number): number[] {
     }
   }
   return parts.map((p) => p / 100);
+}
+
+/** Na nota o item sai com as escolhas: "Shake proteico (Morango, Pasta de amendoim)". */
+function withOptions(description: string, options: unknown): string {
+  const list = Array.isArray(options) ? (options as Array<{ name?: string }>).map((o) => o.name).filter(Boolean) : [];
+  return list.length ? `${description} (${list.join(', ')})` : description;
 }

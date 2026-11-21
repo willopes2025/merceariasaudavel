@@ -1,18 +1,23 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import {
   CUSTOMER_GOALS,
   formatMoney,
   formatPhone,
   type CustomerGoal,
+  type Order,
+  ORDER_STATUS,
   type ShopCashbackEntry,
   type ShopCatalog,
   type ShopInfo,
   type ShopLoginResult,
   type ShopMe,
+  type ShopProduct,
   type ShopPurchase,
 } from '@mercearia/contracts';
+import { OptionPicker } from '../components/OptionPicker';
+import { useCart, type CartLine } from './cart';
 import { ApiError } from '../lib/api';
 import { customerSession, shopApi, whenCustomerSessionExpires } from './api';
 import { Catalog, Leaf, ProductCard, Qr, Spinner, saving } from './parts';
@@ -228,6 +233,17 @@ function SignedIn({ onSignOut, onToken }: { onSignOut: () => void; onToken: (r: 
       </div>
     );
   if (me.data.mustChangePin) return <CreatePin me={me.data} onToken={onToken} />;
+  return <Shell me={me.data} onSignOut={onSignOut} onToken={onToken} />;
+}
+
+type Cart = ReturnType<typeof useCart>;
+
+function Shell({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; onToken: (r: ShopLoginResult) => void }) {
+  const cart = useCart(`mercearia.carrinho.${me.id}`);
+  const info = useInfo();
+  const ordering = info.data?.ordersEnabled ?? false;
+  const [picking, setPicking] = useState<ShopProduct | null>(null);
+  const onAdd = ordering ? (p: ShopProduct) => (p.optionGroups.length ? setPicking(p) : cart.add(p)) : undefined;
   return (
     <BrowserRouter>
       <div className="mx-auto min-h-screen max-w-md pb-24">
@@ -237,16 +253,233 @@ function SignedIn({ onSignOut, onToken }: { onSignOut: () => void; onToken: (r: 
         </header>
         <main className="px-4">
           <Routes>
-            <Route path="/app" element={<Home me={me.data} />} />
-            <Route path="/app/produtos" element={<Products />} />
+            <Route path="/app" element={<Home me={me} onAdd={onAdd} />} />
+            <Route path="/app/produtos" element={<Products onAdd={onAdd} />} />
             <Route path="/app/extrato" element={<Statement />} />
-            <Route path="/app/conta" element={<Account me={me.data} onSignOut={onSignOut} onToken={onToken} />} />
+            <Route path="/app/conta" element={<Account me={me} onSignOut={onSignOut} onToken={onToken} />} />
+            <Route path="/app/pedido/:id" element={<OrderTrack me={me} />} />
             <Route path="*" element={<Navigate to="/app" replace />} />
           </Routes>
         </main>
+        {ordering && <CartBar cart={cart} />}
         <BottomNav />
+        {picking && (
+          <OptionPicker
+            title={picking.name}
+            groups={picking.optionGroups}
+            basePrice={picking.price}
+            memberPrice={picking.memberPrice}
+            onClose={() => setPicking(null)}
+            onConfirm={(picked, qty) => {
+              cart.add(picking, qty, picked);
+              setPicking(null);
+            }}
+          />
+        )}
       </div>
     </BrowserRouter>
+  );
+}
+
+// ------------------------------------------------------------------ pedido
+
+function CartBar({ cart }: { cart: Cart }) {
+  const [open, setOpen] = useState(false);
+  if (!cart.count) return null;
+  return (
+    <>
+      <div className="fixed inset-x-0 bottom-[64px] z-20 px-4" style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
+        <button onClick={() => setOpen(true)} className="mx-auto flex w-full max-w-md items-center justify-between rounded-2xl bg-brand-dark px-5 py-3.5 text-white shadow-lg">
+          <span className="font-semibold">
+            Ver pedido · {cart.count} ite{cart.count === 1 ? 'm' : 'ns'}
+          </span>
+          <span className="font-bold">{formatMoney(cart.total(true))}</span>
+        </button>
+      </div>
+      {open && <CartSheet cart={cart} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function CartLines({ cart, member }: { cart: Cart; member: boolean }) {
+  return (
+    <ul className="divide-y divide-slate-100">
+      {cart.lines.map((l: CartLine) => (
+        <li key={l.key} className="flex items-center gap-3 py-3">
+          <div className="flex-1">
+            <p className="font-medium text-ink">{l.product.name}</p>
+            {l.optionNames.length > 0 && <p className="text-xs text-ink-soft">{l.optionNames.join(', ')}</p>}
+            <p className="text-sm text-brand">{formatMoney(((member ? l.product.memberPrice : l.product.price) + l.extras) * l.quantity)}</p>
+          </div>
+          <div className="flex items-center rounded-xl border border-slate-300">
+            <button className="px-3 py-1.5 text-lg" onClick={() => cart.setQty(l.key, l.quantity - 1)} aria-label="Menos">
+              −
+            </button>
+            <span className="w-6 text-center tabular-nums">{l.quantity}</span>
+            <button className="px-3 py-1.5 text-lg" onClick={() => cart.setQty(l.key, l.quantity + 1)} aria-label="Mais">
+              +
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [notes, setNotes] = useState('');
+  const m = useMutation({
+    mutationFn: () => shopApi<Order>('/me/orders', { method: 'POST', json: { items: cart.items, notes: notes || null } }),
+    onSuccess: (o) => {
+      cart.clear();
+      qc.invalidateQueries({ queryKey: ['shop', 'orders'] });
+      onClose();
+      navigate(`/app/pedido/${o.id}`);
+    },
+  });
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Seu pedido">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-ink">Seu pedido</h2>
+          <button onClick={onClose} aria-label="Fechar" className="px-2 text-2xl leading-none text-ink-soft">
+            ×
+          </button>
+        </div>
+        <CartLines cart={cart} member />
+        <label className="mt-2 block">
+          <span className="text-sm font-medium text-ink">Observação (opcional)</span>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={200} placeholder="Ex.: sem gelo, bem batido" className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-brand" />
+        </label>
+        <div className="mt-4 flex items-end justify-between">
+          <span className="text-sm text-ink-soft">Total com preço de membro</span>
+          <span className="text-2xl font-bold text-ink">{formatMoney(cart.total(true))}</span>
+        </div>
+        <p className="mt-1 text-xs text-ink-soft">Você paga no caixa (Pix, cartão ou dinheiro) e o preparo começa na hora. Cashback pode ser usado no pagamento.</p>
+        <ErrorLine error={m.error} />
+        <button disabled={m.isPending} onClick={() => m.mutate()} className="mt-3 w-full rounded-xl bg-brand py-3.5 text-base font-semibold text-white disabled:opacity-60">
+          {m.isPending ? 'Enviando…' : 'Fazer pedido · pagar no caixa'}
+        </button>
+        <button onClick={cart.clear} className="mt-2 w-full py-2 text-sm text-ink-soft">
+          Esvaziar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const STEPS: Array<Order['status']> = ['aguardando_pagamento', 'na_fila', 'preparando', 'pronto', 'entregue'];
+const STEP_LABEL: Record<string, string> = { aguardando_pagamento: 'Pagar', na_fila: 'Na fila', preparando: 'Preparo', pronto: 'Pronto', entregue: 'Entregue' };
+
+function OrderTrack({ me }: { me: ShopMe }) {
+  const { id } = useParams();
+  const qc = useQueryClient();
+  const order = useQuery({
+    queryKey: ['shop', 'order', id],
+    queryFn: () => shopApi<Order>(`/me/orders/${id}`),
+    refetchInterval: (q) => (q.state.data && ['entregue', 'cancelado'].includes(q.state.data.status) ? false : 5_000),
+  });
+  const cancel = useMutation({
+    mutationFn: () => shopApi<Order>(`/me/orders/${id}/cancel`, { method: 'POST' }),
+    onSuccess: (o) => {
+      qc.setQueryData(['shop', 'order', id], o);
+      qc.invalidateQueries({ queryKey: ['shop', 'orders'] });
+    },
+  });
+  if (order.isLoading) return <Spinner />;
+  const o = order.data;
+  if (!o) return <ErrorLine error={order.error} />;
+  const step = STEPS.indexOf(o.status);
+  return (
+    <div className="space-y-4">
+      <section className={`rounded-3xl p-6 text-center shadow-lg ${o.status === 'pronto' ? 'bg-brand-accent text-brand-dark' : o.status === 'cancelado' ? 'bg-slate-200 text-ink' : 'bg-gradient-to-br from-brand to-brand-dark text-white'}`}>
+        <p className="text-sm font-semibold uppercase tracking-wider opacity-80">Pedido</p>
+        <p className="text-7xl font-bold tabular-nums">{o.number}</p>
+        <p className="mt-2 text-xl font-bold">{ORDER_STATUS[o.status]}</p>
+        {o.status === 'aguardando_pagamento' && <p className="mt-1 text-sm opacity-90">Vá ao caixa e mostre seu cartão ({me.memberCode}) ou diga o número do pedido.</p>}
+        {o.status === 'pronto' && <p className="mt-1 text-sm font-medium">Pode retirar no balcão!</p>}
+        {o.status === 'cancelado' && o.cancelReason && <p className="mt-1 text-sm">{o.cancelReason}</p>}
+      </section>
+      {o.status !== 'cancelado' && (
+        <ol className="flex justify-between rounded-2xl bg-white p-4 text-center text-[11px] shadow-sm">
+          {STEPS.map((s, i) => (
+            <li key={s} className={`flex-1 ${i <= step ? 'font-semibold text-brand' : 'text-ink-soft'}`}>
+              <span className={`mx-auto mb-1 block h-2.5 w-2.5 rounded-full ${i <= step ? 'bg-brand' : 'bg-slate-300'}`} />
+              {STEP_LABEL[s]}
+            </li>
+          ))}
+        </ol>
+      )}
+      <section className="rounded-2xl bg-white p-4 text-sm shadow-sm">
+        {o.items.map((i, n) => (
+          <p key={n} className="py-0.5">
+            <b>{i.quantity.toLocaleString('pt-BR')}×</b> {i.description}
+            {i.options.length > 0 && <span className="text-ink-soft"> ({i.options.map((x) => x.name).join(', ')})</span>}
+          </p>
+        ))}
+        {o.notes && <p className="mt-1 text-ink-soft">Obs.: {o.notes}</p>}
+        <p className="mt-2 border-t border-slate-100 pt-2 font-semibold">
+          {o.saleId ? 'Pago' : 'Estimado'}: {formatMoney(o.estimate)}
+        </p>
+      </section>
+      {o.status === 'aguardando_pagamento' && (
+        <button disabled={cancel.isPending} onClick={() => cancel.mutate()} className="w-full rounded-xl border border-slate-300 bg-white py-3 font-semibold text-ink">
+          Cancelar pedido
+        </button>
+      )}
+      <ErrorLine error={cancel.error} />
+      <NavLink to="/app" className="block text-center text-sm font-medium text-brand">
+        Voltar ao início
+      </NavLink>
+    </div>
+  );
+}
+
+const useOrders = () => useQuery({ queryKey: ['shop', 'orders'], queryFn: () => shopApi<Order[]>('/me/orders'), refetchInterval: 15_000 });
+
+function ActiveOrders() {
+  const orders = useOrders();
+  const active = (orders.data ?? []).filter((o) => !['entregue', 'cancelado'].includes(o.status)).slice(0, 2);
+  if (!active.length) return null;
+  return (
+    <div className="space-y-2">
+      {active.map((o) => (
+        <NavLink key={o.id} to={`/app/pedido/${o.id}`} className={`flex items-center justify-between rounded-2xl px-4 py-3 shadow-sm ${o.status === 'pronto' ? 'bg-brand-accent text-brand-dark' : 'bg-white'}`}>
+          <span>
+            <span className="text-2xl font-bold tabular-nums">{o.number}</span>
+            <span className="ml-3 text-sm font-semibold">{ORDER_STATUS[o.status]}</span>
+          </span>
+          <span className="text-sm text-brand">Acompanhar ›</span>
+        </NavLink>
+      ))}
+    </div>
+  );
+}
+
+function OrdersHistory() {
+  const orders = useOrders();
+  if (orders.isLoading) return <Spinner />;
+  if (!orders.data?.length) return <Empty>Seus pedidos pelo app aparecem aqui.</Empty>;
+  return (
+    <ul className="space-y-2">
+      {orders.data.map((o) => (
+        <li key={o.id}>
+          <NavLink to={`/app/pedido/${o.id}`} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm">
+            <div>
+              <p className="text-sm font-semibold text-ink">
+                Nº {o.number} · {ORDER_STATUS[o.status]}
+              </p>
+              <p className="text-xs text-ink-soft">
+                {new Date(o.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {o.items.map((i) => i.description).join(', ')}
+              </p>
+            </div>
+            <span className="text-sm font-bold text-ink">{formatMoney(o.estimate)}</span>
+          </NavLink>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -298,7 +531,7 @@ function MemberCard({ me }: { me: ShopMe }) {
   );
 }
 
-function Home({ me }: { me: ShopMe }) {
+function Home({ me, onAdd }: { me: ShopMe; onAdd?: (p: ShopProduct) => void }) {
   const catalog = useCatalog();
   const offers = (catalog.data?.products ?? [])
     .filter((p) => p.available && saving(p) > 0)
@@ -306,6 +539,7 @@ function Home({ me }: { me: ShopMe }) {
     .slice(0, 6);
   return (
     <div className="space-y-4">
+      <ActiveOrders />
       <MemberCard me={me} />
       <InstallHint />
       <div className="grid grid-cols-2 gap-3">
@@ -337,7 +571,7 @@ function Home({ me }: { me: ShopMe }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {offers.map((p) => (
-              <ProductCard key={p.id} p={p} />
+              <ProductCard key={p.id} p={p} onAdd={onAdd} />
             ))}
           </div>
         </section>
@@ -346,28 +580,43 @@ function Home({ me }: { me: ShopMe }) {
   );
 }
 
-function Products() {
+function Products({ onAdd }: { onAdd?: (p: ShopProduct) => void }) {
   const catalog = useCatalog();
   if (catalog.isLoading) return <Spinner />;
   if (!catalog.data) return <ErrorLine error={catalog.error} />;
-  return <Catalog data={catalog.data} header={<h1 className="mb-1 text-xl font-bold text-ink">Produtos</h1>} />;
+  return (
+    <div className="pb-16">
+      <Catalog
+        data={catalog.data}
+        onAdd={onAdd}
+        header={
+          <>
+            <h1 className="text-xl font-bold text-ink">Produtos</h1>
+            {onAdd && <p className="mb-1 text-sm text-ink-soft">Peça pelo app, pague no caixa e retire pronto.</p>}
+          </>
+        }
+      />
+    </div>
+  );
 }
 
 function Statement() {
-  const [tab, setTab] = useState<'cashback' | 'compras'>('cashback');
+  const [tab, setTab] = useState<'cashback' | 'compras' | 'pedidos'>('cashback');
   const cashback = useQuery({ queryKey: ['shop', 'cashback'], queryFn: () => shopApi<ShopCashbackEntry[]>('/me/cashback'), enabled: tab === 'cashback' });
   const purchases = useQuery({ queryKey: ['shop', 'purchases'], queryFn: () => shopApi<ShopPurchase[]>('/me/purchases'), enabled: tab === 'compras' });
   return (
     <div>
       <h1 className="mb-3 text-xl font-bold text-ink">Extrato</h1>
-      <div className="mb-3 grid grid-cols-2 rounded-xl bg-white p-1 shadow-sm">
-        {(['cashback', 'compras'] as const).map((t) => (
+      <div className="mb-3 grid grid-cols-3 rounded-xl bg-white p-1 shadow-sm">
+        {(['cashback', 'compras', 'pedidos'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`rounded-lg py-2 text-sm font-semibold ${tab === t ? 'bg-brand text-white' : 'text-ink-soft'}`}>
-            {t === 'cashback' ? 'Cashback' : 'Compras'}
+            {t === 'cashback' ? 'Cashback' : t === 'compras' ? 'Compras' : 'Pedidos'}
           </button>
         ))}
       </div>
-      {tab === 'cashback' ? (
+      {tab === 'pedidos' ? (
+        <OrdersHistory />
+      ) : tab === 'cashback' ? (
         cashback.isLoading ? (
           <Spinner />
         ) : !cashback.data?.length ? (

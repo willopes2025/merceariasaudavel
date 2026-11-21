@@ -32,6 +32,7 @@ export const PERMISSIONS = {
   fiscalCancel: 'fiscal.cancel',
   reportView: 'report.view',
   goalManage: 'goal.manage',
+  orderPrepare: 'order.prepare',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -59,6 +60,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'fiscal.cancel': 'Cancelar nota fiscal',
   'report.view': 'Ver painéis e relatórios',
   'goal.manage': 'Definir metas e telas de TV',
+  'order.prepare': 'Tela de preparo: andar com os pedidos',
 };
 
 /**
@@ -82,19 +84,19 @@ export const SYSTEM_ROLES: Array<{ code: string; name: string; description: stri
     code: 'seller',
     name: 'Atendente',
     description: 'Atende no balcão, vende e cadastra membros.',
-    permissions: ['customer.view', 'customer.manage', 'sale.create', 'cash.operate', 'stock.view', 'fiscal.view', 'fiscal.emit'],
+    permissions: ['customer.view', 'customer.manage', 'sale.create', 'cash.operate', 'stock.view', 'fiscal.view', 'fiscal.emit', 'order.prepare'],
   },
   {
     code: 'cashier',
     name: 'Caixa',
     description: 'Vende, recebe, opera e fecha o caixa.',
-    permissions: ['customer.view', 'customer.manage', 'sale.create', 'cash.operate', 'cash.close', 'stock.view', 'fiscal.view', 'fiscal.emit'],
+    permissions: ['customer.view', 'customer.manage', 'sale.create', 'cash.operate', 'cash.close', 'stock.view', 'fiscal.view', 'fiscal.emit', 'order.prepare'],
   },
   {
     code: 'kitchen',
     name: 'Preparo (shakes e sorvetes)',
-    description: 'Vê o estoque de insumos, lança perdas e faz a contagem do dia.',
-    permissions: ['stock.view', 'stock.loss'],
+    description: 'Tela de preparo dos pedidos, estoque de insumos, perdas e contagem do dia.',
+    permissions: ['stock.view', 'stock.loss', 'order.prepare'],
   },
 ];
 
@@ -232,3 +234,4 @@ export interface Features {
   whatsapp: boolean;
 }
 export * from './shop';
+export * from './orders';

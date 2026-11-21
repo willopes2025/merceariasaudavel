@@ -10,6 +10,7 @@ import {
   type LossReason,
   type Page,
   type Product,
+  type OptionGroupsInput,
   type ProductDetail,
   type ProductInput,
   type ProductKind,
@@ -25,6 +26,7 @@ import { AuditService } from '../../common/audit.service';
 import { ConflictError, DomainError, ForbiddenError, NotFoundError } from '../../common/errors/domain-error';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { canUseStore, type RequestContext } from '../../common/tenancy/request-context';
+import { loadOptionGroups, saveOptionGroups } from './options';
 import { applyStock, currentStock, putStock, q3, stockStoreOf, takeStock } from './stock';
 
 const include = {
@@ -90,6 +92,7 @@ export class ProductsService {
       ? exact
       : await this.prisma.product.findMany({ where: { ...base, AND: words.map((w) => ({ searchText: { contains: w } })) }, include, orderBy: { name: 'asc' }, take: 12 });
     const realStore = storeId ? await stockStoreOf(this.prisma as unknown as Prisma.TransactionClient, storeId) : null;
+    const groups = await loadOptionGroups(this.prisma, ctx.tenantId, rows.map((r) => r.id));
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -103,6 +106,7 @@ export class ProductsService {
       trackStock: r.trackStock,
       stock: r.trackStock ? q3(r.balances.find((b) => b.storeId === realStore)?.quantity ?? (realStore ? 0 : r.balances.reduce((s, b) => s + Number(b.quantity), 0))) : null,
       categoryName: r.category?.name ?? null,
+      optionGroups: groups.get(r.id) ?? [],
     }));
   }
 
@@ -116,6 +120,7 @@ export class ProductsService {
       this.prisma.recipeItem.findMany({ where: { tenantId: ctx.tenantId, ingredientId: id }, include: { product: { select: { name: true } } } }),
       this.prisma.store.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
     ]);
+    const optionGroups = (await loadOptionGroups(this.prisma, ctx.tenantId, [id])).get(id) ?? [];
     const userIds = [...new Set(movements.map((m) => m.userId))];
     const saleIds = [...new Set(movements.map((m) => m.saleId).filter((v): v is string => Boolean(v)))];
     const lotIds = [...new Set(movements.map((m) => m.lotId).filter((v): v is string => Boolean(v)))];
@@ -151,7 +156,18 @@ export class ProductsService {
         cost: Math.round(Number(r.quantity) * Number(r.ingredient.cost) * 100) / 100,
       })),
       usedIn: usedIn.map((u) => ({ productId: u.productId, name: u.product.name, quantity: c4(Number(u.quantity)) })),
+      optionGroups,
     };
+  }
+
+  /** Montagem do produto (sabor, adicionais com preço e insumo). */
+  async saveOptions(ctx: RequestContext, id: string, input: OptionGroupsInput): Promise<ProductDetail> {
+    const product = await this.prisma.product.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (!product) throw new NotFoundError('produto', id);
+    if (product.kind === 'insumo') throw new DomainError('OPTIONS_NOT_ALLOWED', 'Insumo não tem montagem.');
+    await this.prisma.$transaction((tx) => saveOptionGroups(tx, ctx.tenantId, id, input));
+    await this.audit.record(ctx, 'product.options', 'product', id, { groups: input.groups.length });
+    return this.get(ctx, id);
   }
 
   // ------------------------------------------------------------ cadastro

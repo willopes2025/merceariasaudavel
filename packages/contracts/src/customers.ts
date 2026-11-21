@@ -197,5 +197,9 @@ export const clubSettingsSchema = z.object({
   cashbackDays: z.coerce.number().int().min(0).max(3650),
   /** Até quanto % de uma compra pode ser pago com cashback. */
   cashbackMaxUsePct: pct,
+  /** App e totem aceitam pedido (pago no caixa). */
+  ordersEnabled: z.boolean().default(true),
+  /** Venda no balcão com shake/sorvete manda o pedido para a tela de preparo. */
+  kitchenFromCounter: z.boolean().default(true),
 });
 export type ClubSettings = z.infer<typeof clubSettingsSchema>;

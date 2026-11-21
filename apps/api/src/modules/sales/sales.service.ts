@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   addDays,
   changeFor,
+  type ChosenOption,
   PERMISSIONS,
   todayBR,
   type Page,
@@ -34,10 +35,23 @@ const cents = (v: number | Prisma.Decimal | null | undefined) => Math.round(Numb
 const brStart = (iso: string) => new Date(`${iso}T00:00:00-03:00`);
 const WEIGHT_UNITS = ['KG', 'G', 'L', 'ML'];
 
+interface Supply {
+  ingredientId: string;
+  quantity: number;
+  cost: number;
+  trackStock: boolean;
+  trackLots: boolean;
+}
+
 interface Computed {
   quote: SaleQuote;
-  lines: Array<SaleQuoteLine & { categoryId: string | null; unitCost: number; trackStock: boolean; trackLots: boolean; recipe: Array<{ ingredientId: string; quantity: number; cost: number; trackStock: boolean; trackLots: boolean }> }>;
+  lines: Array<SaleQuoteLine & { categoryId: string | null; unitCost: number; trackStock: boolean; trackLots: boolean; recipe: Supply[]; extras: Supply[] }>;
   subtotalCents: number;
+}
+
+/** Pedido do dia: número curto que volta a 1 todo dia (para chamar no balcão). */
+export async function orderNumber(tx: Tx, tenantId: string): Promise<number> {
+  return nextNumber(tx, tenantId, `order:${todayBR()}`);
 }
 
 const saleInclude = {
@@ -46,6 +60,7 @@ const saleInclude = {
   seller: { select: { name: true } },
   items: { orderBy: { position: 'asc' } },
   payments: { orderBy: { createdAt: 'asc' }, include: { method: { select: { name: true, kind: true } }, reversal: { select: { id: true } } } },
+  order: { select: { id: true, number: true, status: true } },
 } satisfies Prisma.SaleInclude;
 type SaleFull = Prisma.SaleGetPayload<{ include: typeof saleInclude }>;
 
@@ -68,7 +83,12 @@ export class SalesService {
 
   async quote(ctx: RequestContext, input: SaleQuoteInput): Promise<SaleQuote> {
     this.assertStore(ctx, input.storeId);
-    return (await this.compute(this.prisma, ctx, input)).quote;
+    return (await this.compute(this.prisma, ctx.tenantId, input)).quote;
+  }
+
+  /** Conta de um pedido do app/totem (sem caixa, sem usuário da equipe). */
+  async estimate(tenantId: string, input: SaleQuoteInput): Promise<SaleQuote> {
+    return (await this.compute(this.prisma, tenantId, input)).quote;
   }
 
   async create(ctx: RequestContext, input: SaleCreateInput): Promise<Sale> {
@@ -83,7 +103,16 @@ export class SalesService {
     const saleId = await this.prisma.$transaction(
       async (tx) => {
         const session = await this.cash.lockOpenOf(tx, ctx, input.storeId);
-        const { quote, lines } = await this.compute(tx, ctx, input);
+        // Pedido do app/totem sendo cobrado: trava para ninguém cobrar duas vezes.
+        let order: { id: string; status: string; store_id: string; customer_id: string | null } | undefined;
+        if (input.orderId) {
+          order = (await tx.$queryRaw<Array<{ id: string; status: string; store_id: string; customer_id: string | null }>>`
+            SELECT id, status, store_id, customer_id FROM "order" WHERE id = ${input.orderId} AND tenant_id = ${ctx.tenantId} FOR UPDATE`)[0];
+          if (!order) throw new NotFoundError('pedido', input.orderId);
+          if (order.status !== 'aguardando_pagamento') throw new ConflictError('ORDER_NOT_PENDING', 'Esse pedido já foi cobrado ou cancelado.');
+          if (order.store_id !== input.storeId) throw new DomainError('ORDER_OTHER_STORE', 'Esse pedido é de outra loja.');
+        }
+        const { quote, lines } = await this.compute(tx, ctx.tenantId, input);
         const { change, error } = changeFor(quote.total, input.payments.map((p) => ({ amount: p.amount, kind: kindOf(p.methodId) })));
         if (error) throw new DomainError('PAYMENT_MISMATCH', error);
         if (quote.total > 0 && !input.payments.length) throw new DomainError('PAYMENT_MISSING', 'Informe como a cliente pagou.');
@@ -124,6 +153,7 @@ export class SalesService {
                 unitPrice: l.unitPrice,
                 total: l.total,
                 unitCost: l.unitCost,
+                options: l.options.length ? (l.options as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
               })),
             },
           },
@@ -139,6 +169,37 @@ export class SalesService {
             }
           } else if (l.trackStock) {
             await takeStock(tx, { ...base, productId: l.productId, type: 'venda', unitCost: l.unitCost }, l.quantity, { trackLots: l.trackLots });
+          }
+          // Adicionais da montagem: cada opção escolhida gasta o seu insumo.
+          for (const x of l.extras) {
+            if (!x.trackStock) continue;
+            await takeStock(tx, { ...base, productId: x.ingredientId, type: 'consumo', unitCost: x.cost }, q3(x.quantity * l.quantity), { trackLots: x.trackLots });
+          }
+        }
+
+        // Tela de preparo: pedido cobrado entra na fila; balcão com shake/sorvete abre pedido já pago.
+        if (order) {
+          await tx.order.update({ where: { id: order.id }, data: { status: 'na_fila', saleId: sale.id, paidAt: new Date(), customerId: quote.customer?.id ?? order.customer_id } });
+        } else {
+          const prepared = lines.filter((l) => l.kind === 'preparado');
+          const settings = prepared.length ? await tx.tenantSetting.findUnique({ where: { tenantId: ctx.tenantId }, select: { kitchenFromCounter: true } }) : null;
+          if (prepared.length && (settings?.kitchenFromCounter ?? true)) {
+            await tx.order.create({
+              data: {
+                tenantId: ctx.tenantId,
+                storeId: input.storeId,
+                number: await orderNumber(tx, ctx.tenantId),
+                channel: 'balcao',
+                status: 'na_fila',
+                customerId: quote.customer?.id ?? null,
+                callName: quote.customer ? quote.customer.name.split(' ')[0]! : `Venda ${number}`,
+                items: prepared.map((l) => ({ productId: l.productId, description: l.description, kind: l.kind, unit: l.unit, quantity: l.quantity, options: l.options })) as unknown as Prisma.InputJsonValue,
+                estimate: quote.total,
+                notes: input.notes ?? null,
+                saleId: sale.id,
+                paidAt: new Date(),
+              },
+            });
           }
         }
 
@@ -228,6 +289,7 @@ export class SalesService {
           }
         }
         await tx.sale.update({ where: { id }, data: { status: 'canceled', canceledAt: new Date(), canceledById: ctx.userId, cancelReason: input.reason } });
+        await tx.order.updateMany({ where: { saleId: id, tenantId: ctx.tenantId, status: { not: 'cancelado' } }, data: { status: 'cancelado', canceledAt: new Date(), cancelReason: `Venda cancelada: ${input.reason}` } });
       },
       { timeout: 30_000, maxWait: 10_000 },
     );
@@ -280,16 +342,22 @@ export class SalesService {
   // ------------------------------------------------------------ cálculo
 
   /** Preço, preço de membro, desconto, cashback e total — a única conta da venda. */
-  private async compute(db: Db, ctx: RequestContext, input: SaleQuoteInput): Promise<Computed> {
+  private async compute(db: Db, tenantId: string, input: SaleQuoteInput): Promise<Computed> {
     const ids = [...new Set(input.items.map((i) => i.productId))];
-    const [products, customer, rules, storeId] = await Promise.all([
+    const supplySelect = { id: true, name: true, cost: true, trackStock: true, trackLots: true, unit: true, balances: true } as const;
+    const [products, customer, rules, storeId, groups] = await Promise.all([
       db.product.findMany({
-        where: { id: { in: ids }, tenantId: ctx.tenantId },
-        include: { balances: true, recipe: { include: { ingredient: { select: { id: true, name: true, cost: true, trackStock: true, trackLots: true, unit: true, balances: true } } } } },
+        where: { id: { in: ids }, tenantId },
+        include: { balances: true, recipe: { include: { ingredient: { select: supplySelect } } } },
       }),
-      input.customerId ? db.customer.findFirst({ where: { id: input.customerId, tenantId: ctx.tenantId, active: true } }) : null,
-      clubRules(db, ctx.tenantId),
+      input.customerId ? db.customer.findFirst({ where: { id: input.customerId, tenantId, active: true } }) : null,
+      clubRules(db, tenantId),
       stockStoreOf(db as Tx, input.storeId),
+      db.optionGroup.findMany({
+        where: { tenantId, productId: { in: ids }, active: true },
+        include: { options: { where: { active: true }, include: { supply: { select: supplySelect } } } },
+        orderBy: { position: 'asc' },
+      }),
     ]);
     if (input.customerId && !customer) throw new DomainError('CUSTOMER_NOT_FOUND', 'Cliente não encontrada.');
     const member = Boolean(customer?.isMember);
@@ -302,16 +370,42 @@ export class SalesService {
       if (!p.sellable) throw new DomainError('PRODUCT_NOT_SELLABLE', `"${p.name}" é insumo e não está liberado para venda avulsa.`);
       if (!WEIGHT_UNITS.includes(p.unit) && !Number.isInteger(item.quantity)) throw new DomainError('WHOLE_QUANTITY', `"${p.name}" é vendido por ${p.unit}: use número inteiro.`);
       if (p.kind === 'preparado' && !p.recipe.length) throw new DomainError('RECIPE_MISSING', `"${p.name}" ainda não tem ficha técnica. Cadastre a ficha para poder vender.`);
-      const listPrice = Number(p.price);
-      const unitPrice = member && p.memberPrice != null && Number(p.memberPrice) < listPrice ? Number(p.memberPrice) : listPrice;
+      // Montagem: confere as escolhas contra os grupos ativos do produto.
+      const productGroups = groups.filter((g) => g.productId === p.id && g.options.length);
+      const chosenIds = item.options ?? [];
+      if (new Set(chosenIds).size !== chosenIds.length) throw new DomainError('OPTION_REPEATED', `"${p.name}": a mesma opção foi escolhida duas vezes.`);
+      const chosen = chosenIds.map((oid) => {
+        const g = productGroups.find((x) => x.options.some((o) => o.id === oid));
+        if (!g) throw new DomainError('OPTION_NOT_FOUND', `"${p.name}": uma das opções escolhidas não existe mais. Monte o item de novo.`);
+        return { group: g, option: g.options.find((o) => o.id === oid)! };
+      });
+      for (const g of productGroups) {
+        const n = chosen.filter((c) => c.group.id === g.id).length;
+        if (n < g.minSelect) throw new DomainError('OPTION_MISSING', `"${p.name}": escolha ${g.minSelect === 1 ? 'o' : `${g.minSelect} em`} ${g.name.toLowerCase()}.`);
+        if (n > g.maxSelect) throw new DomainError('OPTION_TOO_MANY', `"${p.name}": no máximo ${g.maxSelect} em ${g.name.toLowerCase()}.`);
+      }
+      const options = chosen.map((c) => ({ id: c.option.id, group: c.group.name, name: c.option.name, price: Number(c.option.price) }));
+      const extrasCents = options.reduce((sum, o) => sum + cents(o.price), 0);
+      const extras: Supply[] = chosen
+        .filter((c) => c.option.supply && c.option.supplyQty != null)
+        .map((c) => ({ ingredientId: c.option.supply!.id, quantity: Number(c.option.supplyQty), cost: Number(c.option.supply!.cost), trackStock: c.option.supply!.trackStock, trackLots: c.option.supply!.trackLots }));
+
+      const baseList = Number(p.price);
+      const baseUnit = member && p.memberPrice != null && Number(p.memberPrice) < baseList ? Number(p.memberPrice) : baseList;
+      // Adicional custa igual para membro e não membro.
+      const listPrice = (cents(baseList) + extrasCents) / 100;
+      const unitPrice = (cents(baseUnit) + extrasCents) / 100;
       const totalCents = Math.round(unitPrice * 100 * item.quantity);
       const listCents = Math.round(listPrice * 100 * item.quantity);
-      const recipe = p.recipe.map((r) => ({ ingredientId: r.ingredientId, quantity: Number(r.quantity), cost: Number(r.ingredient.cost), trackStock: r.ingredient.trackStock, trackLots: r.ingredient.trackLots }));
-      const unitCost = p.kind === 'preparado' ? recipe.reduce((s, r) => s + r.quantity * r.cost, 0) : Number(p.cost);
+      const recipe: Supply[] = p.recipe.map((r) => ({ ingredientId: r.ingredientId, quantity: Number(r.quantity), cost: Number(r.ingredient.cost), trackStock: r.ingredient.trackStock, trackLots: r.ingredient.trackLots }));
+      const unitCost = (p.kind === 'preparado' ? recipe.reduce((s, r) => s + r.quantity * r.cost, 0) : Number(p.cost)) + extras.reduce((s, x) => s + x.quantity * x.cost, 0);
 
       // Aviso de estoque (não bloqueia): soma o que esta venda tira de cada produto.
       let stockWarning: string | null = null;
-      const need = p.kind === 'preparado' ? p.recipe.filter((r) => r.ingredient.trackStock).map((r) => ({ id: r.ingredientId, name: r.ingredient.name, unit: r.ingredient.unit, qty: Number(r.quantity) * item.quantity, balances: r.ingredient.balances })) : p.trackStock ? [{ id: p.id, name: p.name, unit: p.unit, qty: item.quantity, balances: p.balances }] : [];
+      const need = [
+        ...(p.kind === 'preparado' ? p.recipe.filter((r) => r.ingredient.trackStock).map((r) => ({ id: r.ingredientId, name: r.ingredient.name, unit: r.ingredient.unit, qty: Number(r.quantity) * item.quantity, balances: r.ingredient.balances })) : p.trackStock ? [{ id: p.id, name: p.name, unit: p.unit, qty: item.quantity, balances: p.balances }] : []),
+        ...chosen.filter((c) => c.option.supply?.trackStock && c.option.supplyQty != null).map((c) => ({ id: c.option.supply!.id, name: c.option.supply!.name, unit: c.option.supply!.unit, qty: Number(c.option.supplyQty) * item.quantity, balances: c.option.supply!.balances })),
+      ];
       for (const n of need) {
         const total = q3((used.get(n.id) ?? 0) + n.qty);
         used.set(n.id, total);
@@ -321,6 +415,7 @@ export class SalesService {
       return {
         productId: p.id,
         description: p.name,
+        options,
         kind: p.kind as ProductKind,
         unit: p.unit as Unit,
         quantity: item.quantity,
@@ -334,6 +429,7 @@ export class SalesService {
         trackStock: p.trackStock,
         trackLots: p.trackLots,
         recipe,
+        extras,
       };
     });
 
@@ -358,7 +454,7 @@ export class SalesService {
       quote: {
         member,
         customer: customer ? { id: customer.id, name: customer.name, cashbackBalance: balance / 100 } : null,
-        items: lines.map(({ categoryId: _c, unitCost: _u, trackStock: _t, trackLots: _l, recipe: _r, ...l }) => l),
+        items: lines.map(({ categoryId: _c, unitCost: _u, trackStock: _t, trackLots: _l, recipe: _r, extras: _x, ...l }) => l),
         grossTotal: grossCents / 100,
         memberSavings: (grossCents - subtotalCents) / 100,
         discount: discountCents / 100,
@@ -410,7 +506,8 @@ function toSale(s: SaleFull, doc: { id: string; status: string; number: string |
     customerName: s.customer?.name ?? null,
     memberPricing: s.memberPricing,
     sellerName: s.seller?.name ?? null,
-    items: s.items.map((i) => ({ productId: i.productId, description: i.description, unit: i.unit as Unit, quantity: q3(i.quantity), listPrice: Number(i.listPrice), unitPrice: Number(i.unitPrice), total: Number(i.total) })),
+    items: s.items.map((i) => ({ productId: i.productId, description: i.description, options: (i.options as unknown as ChosenOption[] | null) ?? [], unit: i.unit as Unit, quantity: q3(i.quantity), listPrice: Number(i.listPrice), unitPrice: Number(i.unitPrice), total: Number(i.total) })),
+    order: s.order ? { id: s.order.id, number: s.order.number, status: s.order.status } : null,
     grossTotal: Number(s.grossTotal),
     memberSavings: Number(s.memberSavings),
     discount: Number(s.discount),

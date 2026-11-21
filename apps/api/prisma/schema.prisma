@@ -54,6 +54,10 @@ model TenantSetting {
   cashbackDays     Int      @default(0) @map("cashback_days")
   /// Até quanto % da compra pode ser paga com cashback.
   cashbackMaxUsePct Decimal @default(100) @map("cashback_max_use_pct") @db.Decimal(5, 2)
+  /// App e totem aceitam pedido (pago no caixa).
+  ordersEnabled    Boolean  @default(true) @map("orders_enabled")
+  /// Venda no balcão com shake/sorvete manda o pedido para a tela de preparo.
+  kitchenFromCounter Boolean @default(true) @map("kitchen_from_counter")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -80,6 +84,7 @@ model Store {
   customers    Customer[]
   cashSessions CashSession[]
   sales        Sale[]
+  orders       Order[]
 
   @@unique([tenantId, code])
   @@map("store")
@@ -195,6 +200,7 @@ model Customer {
   tenant   Tenant          @relation(fields: [tenantId], references: [id])
   store    Store?          @relation(fields: [storeId], references: [id], onDelete: SetNull)
   sales    Sale[]
+  orders   Order[]
   cashback CashbackEntry[]
   access   CustomerAccess?
 
@@ -291,6 +297,8 @@ model Product {
   lots     StockLot[]
   recipe   RecipeItem[]     @relation("RecipeOf")
   usedIn   RecipeItem[]     @relation("RecipeIngredient")
+  optionGroups OptionGroup[]
+  optionSupplies ProductOption[] @relation("OptionSupply")
 
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
@@ -500,6 +508,7 @@ model Sale {
   seller    AppUser?       @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: SetNull)
   items     SaleItem[]
   payments  CashMovement[]
+  order     Order?
 
   @@unique([tenantId, number])
   @@index([tenantId, storeId, createdAt])
@@ -526,6 +535,8 @@ model SaleItem {
   discount     Decimal @default(0) @db.Decimal(12, 2)
   total        Decimal @db.Decimal(12, 2)
   unitCost     Decimal @default(0) @map("unit_cost") @db.Decimal(12, 4)
+  /// Complementos escolhidos (sabor, adicionais): [{ id, group, name, price }].
+  options      Json?
 
   sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
@@ -712,4 +723,84 @@ model CustomerAccess {
 
   @@index([tenantId])
   @@map("customer_access")
+}
+
+/// Montagem do produto: "Sabor" (escolha 1), "Adicionais" (até 3)…
+model OptionGroup {
+  id        String  @id @default(uuid())
+  tenantId  String  @map("tenant_id")
+  productId String  @map("product_id")
+  name      String
+  minSelect Int     @default(0) @map("min_select")
+  maxSelect Int     @default(1) @map("max_select")
+  position  Int     @default(0)
+  active    Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options ProductOption[]
+
+  @@index([tenantId, productId])
+  @@map("option_group")
+}
+
+/// Uma escolha da montagem: preço extra e o insumo que ela gasta.
+model ProductOption {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  groupId    String   @map("group_id")
+  name       String
+  /// Somado ao preço do item (membro e não membro pagam igual o adicional).
+  price      Decimal  @default(0) @db.Decimal(12, 2)
+  /// Insumo que sai do estoque quando escolhe esta opção (ex.: pasta de amendoim 0,02 kg).
+  supplyId   String?  @map("supply_id")
+  supplyQty  Decimal? @map("supply_qty") @db.Decimal(14, 3)
+  position   Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  group  OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  supply Product?    @relation("OptionSupply", fields: [supplyId], references: [id])
+
+  @@index([tenantId, groupId])
+  @@map("product_option")
+}
+
+/// Pedido do app, do totem ou do balcão: paga no caixa e vai para a tela de preparo.
+model Order {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  storeId      String    @map("store_id")
+  number       Int
+  /// app | totem | balcao
+  channel      String
+  /// aguardando_pagamento | na_fila | preparando | pronto | entregue | cancelado
+  status       String    @default("aguardando_pagamento")
+  customerId   String?   @map("customer_id")
+  /// Nome para chamar no balcão (primeiro nome no totem).
+  callName     String    @map("call_name")
+  /// [{ productId, quantity, options: [ids], description, kind }]
+  items        Json
+  /// Valor estimado quando o pedido foi feito (o caixa recalcula ao cobrar).
+  estimate     Decimal   @default(0) @db.Decimal(12, 2)
+  notes        String?
+  saleId       String?   @unique @map("sale_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  paidAt       DateTime? @map("paid_at")
+  startedAt    DateTime? @map("started_at")
+  readyAt      DateTime? @map("ready_at")
+  deliveredAt  DateTime? @map("delivered_at")
+  canceledAt   DateTime? @map("canceled_at")
+  cancelReason String?   @map("cancel_reason")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  store    Store     @relation(fields: [storeId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+  sale     Sale?     @relation(fields: [saleId], references: [id])
+
+  @@index([tenantId, storeId, status])
+  @@index([tenantId, customerId, createdAt])
+  @@map("order")
 }

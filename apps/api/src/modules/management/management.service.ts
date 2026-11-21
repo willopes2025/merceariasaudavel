@@ -237,7 +237,12 @@ export class ManagementService {
       sellers(this.prisma, todayW),
       byHour(this.prisma, todayW),
       this.prisma.goal.findMany({ where: { tenantId: screen.tenantId, active: true, startDate: { lte: todayDate }, endDate: { gte: todayDate }, OR: [{ storeId: null }, { storeId: screen.storeId }] }, orderBy: { name: 'asc' }, take: 8 }),
-      this.prisma.product.findMany({ where: { tenantId: screen.tenantId, active: true, sellable: true, memberPrice: { not: null } }, select: { name: true, price: true, memberPrice: true }, take: 60 }),
+      // As maiores economias de membro (em %), calculadas no banco.
+      this.prisma.$queryRaw<Array<{ name: string; price: Prisma.Decimal; memberPrice: Prisma.Decimal }>>`
+        SELECT name, price, member_price AS "memberPrice" FROM product
+         WHERE tenant_id = ${screen.tenantId} AND active AND sellable AND show_in_app AND kind <> 'insumo'
+           AND member_price IS NOT NULL AND price > 0 AND member_price < price
+         ORDER BY (price - member_price) / price DESC, name LIMIT 12`,
     ]);
     const goals = await this.withProgress(screen.tenantId, goalRows);
     const monthGoal = goals.find((g) => g.metric === 'faturamento' && g.scope === 'loja' && g.startDate <= month.start && g.endDate >= month.end);

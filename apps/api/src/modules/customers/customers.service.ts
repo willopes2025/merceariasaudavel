@@ -245,7 +245,8 @@ export class CustomersService {
   // ------------------------------------------------------------ regras do clube
 
   async club(ctx: RequestContext): Promise<ClubSettings> {
-    return clubRules(this.prisma, ctx.tenantId);
+    const [rules, row] = await Promise.all([clubRules(this.prisma, ctx.tenantId), this.prisma.tenantSetting.findUnique({ where: { tenantId: ctx.tenantId }, select: { ordersEnabled: true, kitchenFromCounter: true } })]);
+    return { ...rules, ordersEnabled: row?.ordersEnabled ?? true, kitchenFromCounter: row?.kitchenFromCounter ?? true };
   }
 
   async saveClub(ctx: RequestContext, input: ClubSettings): Promise<ClubSettings> {

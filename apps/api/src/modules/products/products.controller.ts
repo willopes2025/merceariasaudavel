@@ -4,11 +4,13 @@ import {
   PERMISSIONS,
   productListQuery,
   productSchema,
+  optionGroupsSchema,
   recipeSchema,
   stockMoveSchema,
   type CategoryInput,
   type ProductInput,
   type ProductListQuery,
+  type OptionGroupsInput,
   type RecipeInput,
   type StockMoveInput,
 } from '@mercearia/contracts';
@@ -70,6 +72,12 @@ export class ProductsController {
   @RequiresPermission(PERMISSIONS.productManage)
   recipe(@Ctx() ctx: RequestContext, @Param('id', uuid) id: string, @Body(new ZodValidationPipe(recipeSchema)) body: RecipeInput) {
     return this.products.saveRecipe(ctx, id, body);
+  }
+
+  @Put('products/:id/options')
+  @RequiresPermission(PERMISSIONS.productManage)
+  options(@Ctx() ctx: RequestContext, @Param('id', uuid) id: string, @Body(new ZodValidationPipe(optionGroupsSchema)) body: OptionGroupsInput) {
+    return this.products.saveOptions(ctx, id, body);
   }
 
   /** Entrada e acerto pedem stock.adjust; perda pede stock.loss (a equipe do preparo lança). */
