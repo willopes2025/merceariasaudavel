@@ -3,10 +3,11 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
+import { StorefrontService } from './modules/storefront/storefront.service';
 
 /** BigInt do Postgres precisa virar número no JSON — senão o Express estoura. */
 (BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function toJSON(this: bigint) {
@@ -59,6 +60,27 @@ function serveWebApps(app: NestExpressApplication): void {
   for (const bundle of bundles) {
     app.useStaticAssets(bundle.dir, { prefix: bundle.prefix, index: false });
   }
+
+  // Loja online: robots, sitemap e páginas da vitrine com título, descrição,
+  // foto e dados estruturados (Google, WhatsApp e Instagram leem sem rodar o app).
+  const storefront = app.get(StorefrontService);
+  const indexCache = new Map<string, string>();
+  app.use(async (request: Request, response: Response, next: NextFunction) => {
+    if (request.method !== 'GET') return next();
+    try {
+      if (request.path === '/robots.txt') return response.type('text/plain').send(storefront.robots());
+      if (request.path === '/sitemap.xml') return response.type('application/xml').send(await storefront.sitemap());
+      if (!request.path.startsWith('/loja')) return next();
+      const meta = await storefront.pageMeta(request.path);
+      const bundle = bundles.find((b) => b.prefix === '/');
+      if (!meta || !bundle) return next();
+      let html = indexCache.get(bundle.dir);
+      if (!html) indexCache.set(bundle.dir, (html = readFileSync(join(bundle.dir, 'index.html'), 'utf8')));
+      return response.type('text/html').send(storefront.inject(html, meta));
+    } catch {
+      return next();
+    }
+  });
 
   // Rota de aplicação (/configuracoes/lojas) devolve o index.html — sem isso,
   // recarregar a página daria 404.

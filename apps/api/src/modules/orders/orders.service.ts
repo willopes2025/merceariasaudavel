@@ -11,6 +11,7 @@ import {
   type ChosenOption,
   type Order,
   type OrderAdvanceInput,
+  type Origin,
   type OrderChannel,
   type OrderItem,
   type OrderStatus,
@@ -244,7 +245,7 @@ export class OrdersService {
         paymentNote: input.payOnline ? '' : `${PAY_ON_DELIVERY[pay]} na entrega${change}`,
       };
     }
-    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery, input.couponCode, input.payOnline);
+    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery, input.couponCode, input.payOnline, input.origin);
   }
 
   async createFromTotem(place: ShopPlace, input: TotemOrderInput): Promise<Order> {
@@ -308,7 +309,7 @@ export class OrdersService {
 
   // ---------------------------------------------------------------- apoio
 
-  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null, couponCode: string | null = null, payOnline: 'pix' | 'cartao' | null = null): Promise<Order> {
+  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null, couponCode: string | null = null, payOnline: 'pix' | 'cartao' | null = null, origin: Origin | null = null): Promise<Order> {
     // Mesma conta do caixa (preço de membro, montagem, regras): erro aqui = erro no caixa.
     let quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode, deliveryFee: 0 });
     // Cupom que não vale avisa já no app (o caixa conferiria de novo).
@@ -338,6 +339,7 @@ export class OrdersService {
           notes,
           couponCode: couponCode && !quote.couponError ? couponCode : null,
           payOnline,
+          ...(origin ? { origin: origin as unknown as Prisma.InputJsonValue } : {}),
           ...(delivery
             ? { fulfillment: 'entrega', address: delivery.address as unknown as Prisma.InputJsonValue, zoneId: delivery.zoneId, deliveryFee: fee, paymentNote: delivery.paymentNote || null }
             : {}),

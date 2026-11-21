@@ -70,6 +70,10 @@ model TenantSetting {
   onlinePix          Boolean  @default(false) @map("online_pix")
   onlineCard         Boolean  @default(false) @map("online_card")
   onlineTotem        Boolean  @default(false) @map("online_totem")
+  /// Loja online: texto da vitrine (Google e compartilhamento) e ids públicos de anúncio.
+  shopDescription    String?  @map("shop_description")
+  metaPixelId        String?  @map("meta_pixel_id")
+  ga4Id              String?  @map("ga4_id")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -205,6 +209,8 @@ model Customer {
   /// Parceiro (nutri/personal) que indicou: as compras dela geram comissão para ele.
   partnerId       String?   @map("partner_id")
   partnerSince    DateTime? @map("partner_since")
+  /// De onde veio no cadastro pelo app/loja: { source, medium, campaign, ... }.
+  origin          Json?
   storeId         String?   @map("store_id")
   notes           String?
   active          Boolean   @default(true)
@@ -841,6 +847,8 @@ model Order {
   couponCode   String?   @map("coupon_code")
   /// Escolheu pagar pelo app: pix | cartao (nulo = paga no caixa ou na entrega).
   payOnline    String?   @map("pay_online")
+  /// De onde veio o pedido (UTM do anúncio): { source, medium, campaign, ... }.
+  origin       Json?
   courierId    String?   @map("courier_id")
   dispatchedAt DateTime? @map("dispatched_at")
   saleId       String?   @unique @map("sale_id")

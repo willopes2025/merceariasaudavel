@@ -8,6 +8,7 @@ import { DomainExceptionFilter } from './common/errors/domain-exception.filter';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { PaymentsCoreModule } from './common/payments/payments-core.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { StorefrontModule } from './modules/storefront/storefront.module';
 import { RequestContextMiddleware } from './common/tenancy/request-context.middleware';
 import { HealthController } from './health.controller';
 import { CustomersModule } from './modules/customers/customers.module';
@@ -61,6 +62,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     DeliveryModule,
     PartnersModule,
     PaymentsModule,
+    StorefrontModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -26,6 +26,8 @@ import {
 } from '@mercearia/contracts';
 import { OptionPicker } from '../components/OptionPicker';
 import { OnlinePay } from './OnlinePay';
+import { CookieBanner } from './CookieBanner';
+import { captureOrigin, currentOrigin, initTracking, track } from './track';
 import { useCart, type CartLine } from './cart';
 import { ApiError } from '../lib/api';
 import { customerSession, shopApi, whenCustomerSessionExpires } from './api';
@@ -60,6 +62,7 @@ export function CustomerApp() {
     setToken(null);
   });
   useEffect(() => {
+    captureOrigin();
     const params = new URLSearchParams(window.location.search);
     try {
       const ref = params.get('ref');
@@ -87,11 +90,21 @@ export function CustomerApp() {
   return (
     <QueryClientProvider client={client}>
       <div className="min-h-full bg-[#F6F8F4]">{token ? <SignedIn onSignOut={signOut} onToken={signedIn} /> : <Welcome onSignedIn={signedIn} />}</div>
+      <Tracking />
     </QueryClientProvider>
   );
 }
 
-const useInfo = () => useQuery({ queryKey: ['shop', 'info'], queryFn: () => shopApi<ShopInfo>(''), staleTime: 5 * 60_000 });
+/** Pixel/Analytics (com o aceite de cookies). */
+export function Tracking() {
+  const info = useInfo();
+  useEffect(() => {
+    if (info.data) initTracking(info.data.tracking);
+  }, [info.data]);
+  return <CookieBanner tracking={info.data?.tracking} />;
+}
+
+export const useInfo = () => useQuery({ queryKey: ['shop', 'info'], queryFn: () => shopApi<ShopInfo>(''), staleTime: 5 * 60_000 });
 const useCatalog = () => useQuery({ queryKey: ['shop', 'catalog'], queryFn: () => shopApi<ShopCatalog>('/catalog'), staleTime: 60_000 });
 const useMe = () => useQuery({ queryKey: ['shop', 'me'], queryFn: () => shopApi<ShopMe>('/me') });
 
@@ -138,7 +151,7 @@ function Welcome({ onSignedIn }: { onSignedIn: (r: ShopLoginResult) => void }) {
   );
 }
 
-function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
+export function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   const { label, hint, ...rest } = props;
   return (
     <label className="block">
@@ -152,21 +165,24 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: str
 const pinProps = { inputMode: 'numeric' as const, pattern: '\\d{6}', maxLength: 6, autoComplete: 'off' };
 const onlyDigits = (v: string) => v.replace(/\D/g, '').slice(0, 6);
 
-function ErrorLine({ error }: { error: unknown }) {
+export function ErrorLine({ error }: { error: unknown }) {
   if (!error) return null;
   return <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error instanceof Error ? error.message : 'Algo deu errado.'}</p>;
 }
 
-function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; club?: ShopInfo['club'] }) {
+export function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; club?: ShopInfo['club'] }) {
   const [f, setF] = useState({ name: '', phone: '', document: '', birthDate: '', pin: '', pin2: '', goal: '' as CustomerGoal | '', allowWhatsapp: true, acceptTerms: false });
   const [local, setLocal] = useState<string | null>(null);
   const m = useMutation({
     mutationFn: () =>
       shopApi<ShopLoginResult>('/signup', {
         method: 'POST',
-        json: { name: f.name, phone: f.phone, document: f.document || null, birthDate: f.birthDate || null, pin: f.pin, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp, acceptTerms: f.acceptTerms, partnerCode: stored(REF_KEY) },
+        json: { name: f.name, phone: f.phone, document: f.document || null, birthDate: f.birthDate || null, pin: f.pin, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp, acceptTerms: f.acceptTerms, partnerCode: stored(REF_KEY), origin: currentOrigin() },
       }),
-    onSuccess: onDone,
+    onSuccess: (r) => {
+      track('CompleteRegistration');
+      onDone(r);
+    },
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -227,7 +243,7 @@ function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; cl
   );
 }
 
-function LoginForm({ onDone }: { onDone: (r: ShopLoginResult) => void }) {
+export function LoginForm({ onDone }: { onDone: (r: ShopLoginResult) => void }) {
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const m = useMutation({ mutationFn: () => shopApi<ShopLoginResult>('/login', { method: 'POST', json: { phone, pin } }), onSuccess: onDone });
@@ -274,7 +290,7 @@ function Shell({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; 
   const info = useInfo();
   const ordering = info.data?.ordersEnabled ?? false;
   const [picking, setPicking] = useState<ShopProduct | null>(null);
-  const onAdd = ordering ? (p: ShopProduct) => (p.optionGroups.length ? setPicking(p) : cart.add(p)) : undefined;
+  const onAdd = ordering ? (p: ShopProduct) => (p.optionGroups.length ? setPicking(p) : (cart.add(p), track('AddToCart', { value: effectivePrice(p, true), ids: [p.id], name: p.name }))) : undefined;
   return (
     <BrowserRouter>
       <div className="mx-auto min-h-screen max-w-md pb-24">
@@ -315,7 +331,17 @@ function Shell({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; 
 // ------------------------------------------------------------------ pedido
 
 function CartBar({ cart }: { cart: Cart }) {
-  const [open, setOpen] = useState(false);
+  // Veio da loja online com o carrinho: já abre para finalizar.
+  const [open, setOpen] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (!p.has('carrinho')) return false;
+    window.history.replaceState(null, '', '/app');
+    return true;
+  });
+  useEffect(() => {
+    if (open) track('InitiateCheckout', { value: cart.total(true), ids: cart.lines.map((l) => l.product.id) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   if (!cart.count) return null;
   return (
     <>
@@ -332,7 +358,7 @@ function CartBar({ cart }: { cart: Cart }) {
   );
 }
 
-function CartLines({ cart, member }: { cart: Cart; member: boolean }) {
+export function CartLines({ cart, member }: { cart: Cart; member: boolean }) {
   return (
     <ul className="divide-y divide-slate-100">
       {cart.lines.map((l: CartLine) => (
@@ -391,7 +417,7 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
     mutationFn: () =>
       shopApi<Order>('/me/orders', {
         method: 'POST',
-        json: { items: cart.items, notes: notes || null, couponCode: coupon.trim() ? coupon.trim().toUpperCase() : null, fulfillment: mode, payOnline: payNow, ...(mode === 'entrega' ? { addressId, payOnDelivery: payNow ? null : pay, changeFor: !payNow && pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
+        json: { items: cart.items, notes: notes || null, couponCode: coupon.trim() ? coupon.trim().toUpperCase() : null, fulfillment: mode, payOnline: payNow, origin: currentOrigin(), ...(mode === 'entrega' ? { addressId, payOnDelivery: payNow ? null : pay, changeFor: !payNow && pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
       }),
     onSuccess: (o) => {
       cart.clear();
@@ -528,6 +554,7 @@ function OrderTrack({ me }: { me: ShopMe }) {
   const o = order.data;
   if (!o) return <ErrorLine error={order.error} />;
   const onlineMethods = [...(info.data?.online.pix ? (['pix'] as const) : []), ...(info.data?.online.card ? (['cartao'] as const) : [])];
+  if (o.saleId && o.status !== 'cancelado') track('Purchase', { value: o.estimate, orderId: o.id, ids: o.items.map((i) => i.productId) });
   const canPayOnline = o.status === 'aguardando_pagamento' && (onlineMethods.length > 0 || Boolean(o.online && o.online.status !== 'cancelado'));
   const steps = o.fulfillment === 'entrega' ? DELIVERY_STEPS : STEPS;
   const step = steps.indexOf(o.status === 'pronto' && o.fulfillment === 'entrega' ? 'preparando' : o.status);
@@ -1143,7 +1170,7 @@ function Addresses() {
 
 // ------------------------------------------------------------------ kits
 
-function Kits({ goal, onAddKit }: { goal: CustomerGoal | null; onAddKit?: (k: ShopKit) => void }) {
+export function Kits({ goal, onAddKit }: { goal: CustomerGoal | null; onAddKit?: (k: ShopKit) => void }) {
   const kits = useQuery({ queryKey: ['shop', 'kits'], queryFn: () => shopApi<ShopKit[]>('/kits'), staleTime: 5 * 60_000 });
   const [added, setAdded] = useState<string | null>(null);
   const wanted = stored(KIT_KEY);

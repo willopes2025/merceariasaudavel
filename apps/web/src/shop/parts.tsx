@@ -40,13 +40,14 @@ function unitLabel(p: ShopProduct) {
   return p.soldByWeight ? '/kg' : p.unit !== 'UN' ? `/${p.unit.toLowerCase()}` : '';
 }
 
-export function ProductCard({ p, big, onAdd }: { p: ShopProduct; big?: boolean; onAdd?: (p: ShopProduct) => void }) {
+export function ProductCard({ p, big, onAdd, href }: { p: ShopProduct; big?: boolean; onAdd?: (p: ShopProduct) => void; href?: string }) {
   const off = saving(p);
   const pctOff = off > 0 ? Math.round((off / p.price) * 100) : 0;
   const [broken, setBroken] = useState(false);
   return (
     <article className={`relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white ${p.available ? '' : 'opacity-60'}`}>
       <div className="relative aspect-square bg-brand-soft">
+        {href && <a href={href} className="absolute inset-0 z-[1]" aria-label={p.name} />}
         {p.imageUrl && !broken ? (
           <img src={p.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setBroken(true)} />
         ) : (
@@ -62,7 +63,7 @@ export function ProductCard({ p, big, onAdd }: { p: ShopProduct; big?: boolean; 
         {!p.available && <span className="absolute right-2 top-2 rounded-full bg-ink/80 px-2 py-0.5 text-xs font-medium text-white">Esgotado</span>}
       </div>
       <div className="flex flex-1 flex-col p-3">
-        <h3 className={`${big ? 'text-base' : 'text-sm'} font-semibold leading-snug text-ink`}>{p.name}</h3>
+        <h3 className={`${big ? 'text-base' : 'text-sm'} font-semibold leading-snug text-ink`}>{href ? <a href={href} className="hover:underline">{p.name}</a> : p.name}</h3>
         {p.brand && <p className="text-xs text-ink-soft">{p.brand}</p>}
         {p.description && big && <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{p.description}</p>}
         {p.optionGroups.length > 0 && <p className="mt-1 text-[11px] font-medium text-brand">Monte do seu jeito</p>}
@@ -114,7 +115,7 @@ const fold = (s: string) =>
     .toLowerCase();
 
 /** Busca + categorias + grade de produtos (usada no app e no cardápio). */
-export function Catalog({ data, big, header, onAdd }: { data: ShopCatalog; big?: boolean; header?: ReactNode; onAdd?: (p: ShopProduct) => void }) {
+export function Catalog({ data, big, header, onAdd, linkOf }: { data: ShopCatalog; big?: boolean; header?: ReactNode; onAdd?: (p: ShopProduct) => void; linkOf?: (p: ShopProduct) => string }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
   const [onlyOffers, setOnlyOffers] = useState(false);
@@ -156,9 +157,9 @@ export function Catalog({ data, big, header, onAdd }: { data: ShopCatalog; big?:
       {list.length === 0 ? (
         <p className="py-16 text-center text-ink-soft">Nada encontrado. Tente outra palavra.</p>
       ) : (
-        <div className={`mt-2 grid gap-3 ${big ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
+        <div className={`mt-2 grid gap-3 ${big ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
           {list.map((p) => (
-            <ProductCard key={p.id} p={p} big={big} onAdd={onAdd} />
+            <ProductCard key={p.id} p={p} big={big} onAdd={onAdd} href={linkOf?.(p)} />
           ))}
         </div>
       )}

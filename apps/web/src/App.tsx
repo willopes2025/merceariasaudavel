@@ -32,6 +32,7 @@ function screen<M, C extends ComponentType<any>>(load: () => Promise<M>, pick: (
 const StoresScreen = screen(() => import('./screens/settings/StoresScreen'), (m) => m.StoresScreen);
 const UsersScreen = screen(() => import('./screens/settings/UsersScreen'), (m) => m.UsersScreen);
 const FiscalSettingsScreen = screen(() => import('./screens/settings/FiscalSettingsScreen'), (m) => m.FiscalSettingsScreen);
+const StorefrontScreen = screen(() => import('./screens/storefront/StorefrontScreen'), (m) => m.StorefrontScreen);
 const OnlinePaymentScreen = screen(() => import('./screens/settings/OnlinePaymentScreen'), (m) => m.OnlinePaymentScreen);
 const ClubScreen = screen(() => import('./screens/settings/ClubScreens'), (m) => m.ClubScreen);
 const CategoriesScreen = screen(() => import('./screens/settings/ClubScreens'), (m) => m.CategoriesScreen);
@@ -53,6 +54,7 @@ const DeliveriesScreen = screen(() => import('./screens/delivery/DeliveryScreens
 const DeliverySettingsScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliverySettingsScreen);
 const PartnersScreen = screen(() => import('./screens/partners/PartnersScreens'), (m) => m.PartnersScreen);
 const KitsScreen = screen(() => import('./screens/partners/PartnersScreens'), (m) => m.KitsScreen);
+const Storefront = screen(() => import('./shop/Storefront'), (m) => m.Storefront);
 const PartnerPage = screen(() => import('./shop/PartnerPage'), (m) => m.PartnerPage);
 const CourierPage = screen(() => import('./shop/CourierPage'), (m) => m.CourierPage);
 const AppLinksScreen = screen(() => import('./screens/shop/AppLinksScreen'), (m) => m.AppLinksScreen);
@@ -106,6 +108,13 @@ export function App() {
     return (
       <Suspense fallback={null}>
         <CustomerApp />
+      </Suspense>
+    );
+  }
+  if (path === '/loja' || path.startsWith('/loja/')) {
+    return (
+      <Suspense fallback={null}>
+        <Storefront />
       </Suspense>
     );
   }
@@ -166,6 +175,7 @@ export function App() {
             <Route path="entregas" element={<DeliveriesScreen />} />
             <Route path="configuracoes/entrega" element={<DeliverySettingsScreen />} />
             <Route path="pagamento-online" element={<OnlinePaymentScreen />} />
+            <Route path="loja-online" element={<StorefrontScreen />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
             <Route path="validades" element={<ExpiringScreen />} />

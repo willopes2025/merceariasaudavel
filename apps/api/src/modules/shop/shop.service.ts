@@ -107,7 +107,7 @@ export class ShopService {
     const t = await this.tenant(slug);
     const [club, settings, zones] = await Promise.all([
       clubRules(this.prisma, t.tenantId),
-      this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true, deliveryEnabled: true, deliveryCity: true, onlinePix: true, onlineCard: true, onlineTotem: true } }),
+      this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true, deliveryEnabled: true, deliveryCity: true, onlinePix: true, onlineCard: true, onlineTotem: true, shopDescription: true, metaPixelId: true, ga4Id: true } }),
       this.prisma.deliveryZone.findMany({ where: { tenantId: t.tenantId, active: true }, orderBy: { name: 'asc' } }),
     ]);
     const running = await runningCampaigns(this.prisma, t.tenantId);
@@ -120,6 +120,8 @@ export class ShopService {
         city: settings?.deliveryCity ?? null,
         zones: zones.map((z) => ({ id: z.id, name: z.name, fee: Number(z.fee), minOrder: Number(z.minOrder), freeAbove: z.freeAbove == null ? null : Number(z.freeAbove), etaMinutes: z.etaMinutes })),
       },
+      description: settings?.shopDescription ?? null,
+      tracking: { metaPixelId: settings?.metaPixelId ?? null, ga4Id: settings?.ga4Id ?? null },
       online: { pix: ready && Boolean(settings?.onlinePix), card: ready && Boolean(settings?.onlineCard), totem: ready && Boolean(settings?.onlineTotem) },
     };
   }
@@ -230,6 +232,7 @@ export class ShopService {
             allowWhatsapp: input.allowWhatsapp,
             birthDate: existing.birthDate ?? (input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null),
             ...(partner && !existing.partnerId ? { partnerId: partner.id, partnerSince: new Date() } : {}),
+            ...(input.origin && !existing.origin ? { origin: input.origin } : {}),
           },
         });
       } else {
@@ -243,6 +246,7 @@ export class ShopService {
             allowWhatsapp: input.allowWhatsapp,
             birthDate: input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null,
             ...(partner ? { partnerId: partner.id, partnerSince: new Date() } : {}),
+            ...(input.origin ? { origin: input.origin } : {}),
             isMember: true,
             memberSince: new Date(),
             memberSource: 'app',

@@ -247,3 +247,4 @@ export * from './purchasing';
 export * from './delivery';
 export * from './partners';
 export * from './payments';
+export * from './storefront';

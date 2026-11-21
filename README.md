@@ -169,3 +169,20 @@ Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
   (Webhooks do Mercado Pago, evento "Pagamentos"), depois `./scripts/atualizar.sh`.
   Para testar sem cobrar: `PAY_PROVIDER=teste` (aparece "Simular pagamento" no caixa).
 - **Testes locais:** `npm run e2e` com a API rodando com `PAY_PROVIDER=teste`.
+
+## Fase 2e — loja online
+
+- **Vitrine aberta** em `/loja`, sem login: busca, categorias, ofertas, kits e carrinho.
+  Cada produto tem página própria (`/loja/p/<id>/<nome>`), com o preço de membro em destaque.
+- **Fechar o pedido:** a cliente entra ou vira membro grátis ali mesmo. O carrinho vai para
+  o app (`/app`), onde ela escolhe retirada/entrega e paga (Pix/cartão online ou no caixa).
+- **Google e redes:** o servidor monta título, descrição, foto (og:) e dados estruturados
+  (Store/Product) de cada página. `robots.txt` deixa o Google ver só a loja, e `sitemap.xml`
+  lista os produtos.
+- **De onde vêm as vendas:** o link guarda utm_source/medium/campaign (e o gclid/fbclid dos
+  anúncios) por 30 dias, e isso vai junto no cadastro e no pedido. **Vender › Loja online** tem:
+  - gerador de link para cada divulgação (bio, stories, anúncios, Google, WhatsApp, panfleto com QR);
+  - relatório de cadastros, pedidos, pagos e vendido por origem.
+- **Pixel do Meta e Google Analytics 4:** basta colar os IDs. Eventos enviados: visita,
+  produto visto, carrinho, cadastro, início da compra e compra paga. Só carregam depois que
+  a cliente aceita os cookies (LGPD).

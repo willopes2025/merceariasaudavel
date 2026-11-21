@@ -1,3 +1,4 @@
+import { originSchema } from './storefront';
 import { z } from 'zod';
 import { isValidCpf, normalizePhone, onlyDigits } from './br';
 import { CUSTOMER_GOALS, type CustomerGoal } from './customers';
@@ -65,6 +66,8 @@ export const shopSignupSchema = z.object({
     .nullish()
     .transform((v) => v || null),
   acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Aceite as regras do clube para continuar' }) }),
+  /** De onde veio (anúncio, Instagram...). */
+  origin: originSchema,
 });
 export type ShopSignupInput = z.infer<typeof shopSignupSchema>;
 export type ShopSignupForm = z.input<typeof shopSignupSchema>;
@@ -120,6 +123,10 @@ export interface ShopInfo {
   delivery: { enabled: boolean; city: string | null; zones: Array<{ id: string; name: string; fee: number; minOrder: number; freeAbove: number | null; etaMinutes: number }> };
   /** Campanhas rodando (ofertas e cashback turbinado; cupom não aparece). */
   campaigns: Array<{ id: string; name: string; type: 'cashback' | 'oferta'; description: string | null; until: string; membersOnly: boolean; extraCashbackPct: number | null }>;
+  /** Texto da vitrine (loja online). */
+  description: string | null;
+  /** Ids públicos de medição de anúncios (só carregam com o aceite de cookies). */
+  tracking: { metaPixelId: string | null; ga4Id: string | null };
   /** Pagamento online ligado (e o provedor pronto). */
   online: { pix: boolean; card: boolean; totem: boolean };
 }

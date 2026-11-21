@@ -92,6 +92,13 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - "Pix online" e "Cartão online" são formas de pagamento criadas sozinhas e não aparecem para escolher no caixa.
 - Um pagamento do provedor vale para um registro só (índice único em provider + provider_payment_id).
 
+## Loja online (Fase 2e)
+- A vitrine é a mesma aplicação web (`/loja`). Os metadados de SEO são postos pelo servidor no index.html (o Google e o WhatsApp não rodam o app). Produto inexistente devolve o app normal.
+- O fechamento do pedido acontece no app da cliente: um só checkout, igual para app e loja online (preço de membro, entrega, cupom, Pix/cartão).
+- Origem = último clique com UTM/gclid/fbclid, válida por 30 dias. Sem parâmetro, vale o site que mandou a visita (se não houver origem guardada). Fica no cadastro (só a primeira) e em cada pedido.
+- Pixel e GA4 só carregam com o "Aceitar" dos cookies. São ids públicos (não são segredo), guardados no banco.
+- `robots.txt`: Google só na loja (`/loja`); o sistema da equipe e o app ficam de fora.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

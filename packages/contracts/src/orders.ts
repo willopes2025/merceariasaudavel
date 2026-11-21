@@ -1,3 +1,4 @@
+import { originSchema } from './storefront';
 import { z } from 'zod';
 import { normalizePhone } from './br';
 import { saleLineSchema, type ChosenOption } from './sales';
@@ -56,6 +57,8 @@ export const shopOrderSchema = z
       .transform((v) => v || null),
     addressId: z.string().uuid().nullish(),
     payOnDelivery: z.enum(['pix', 'cartao', 'dinheiro']).nullish(),
+    /** De onde veio (UTM do anúncio). */
+    origin: originSchema,
     /** Pagar agora pelo app (Pix ou cartão). */
     payOnline: z
       .enum(['pix', 'cartao'])
