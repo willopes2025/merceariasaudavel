@@ -79,3 +79,16 @@ Sem acesso ao servidor de binários do Prisma, use `PRISMA_JS_ENGINE=1`.
 ## Publicar
 
 Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
+
+## Fase 3a — recompra e campanhas
+
+- **Recompra e relacionamento** (Crescer › Recompra): quem deve estar repondo
+  cada produto (pelo ritmo da cliente ou pela duração cadastrada no produto),
+  clientes sumidas (com quanto já gastaram e o cashback parado) e
+  aniversariantes. Botão de WhatsApp com mensagem pronta (editável) e registro
+  do contato. No app, a cliente vê "Hora de repor?".
+- **Campanhas e cupons** (Crescer › Campanhas): cupom (% ou R$, compra mínima,
+  usos no total e por cliente, só membros ou aniversariantes), cashback
+  turbinado (+% em tudo, categorias ou produtos) e oferta (preço promocional).
+  Período e dias da semana. Caixa, app e totem aplicam sozinhos; o caixa sugere
+  o cupom do aniversariante. Cada campanha mostra vendas, faturamento e desconto.

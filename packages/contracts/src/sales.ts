@@ -42,6 +42,14 @@ export const saleQuoteSchema = z.object({
   discount: money.default(0),
   /** Quanto do cashback a cliente quer usar. */
   useCashback: money.default(0),
+  /** Cupom digitado no caixa. */
+  couponCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(20)
+    .nullish()
+    .transform((v) => v || null),
 });
 export type SaleQuoteInput = z.infer<typeof saleQuoteSchema>;
 
@@ -87,6 +95,10 @@ export interface SaleQuoteLine {
   total: number;
   /** Saldo depois da venda ficaria negativo (avisa, não bloqueia). */
   stockWarning: string | null;
+  /** Oferta que baixou o preço desta linha. */
+  campaign: { id: string; name: string } | null;
+  /** Economia da oferta nesta linha (além do preço de membro). */
+  promoSavings: number;
 }
 
 export interface SaleQuote {
@@ -106,6 +118,16 @@ export interface SaleQuote {
   cashbackEarned: number;
   /** Quanto economizaria se fosse membro (para oferecer o clube). */
   wouldSaveAsMember: number;
+  /** Economia das ofertas da vez. */
+  promoSavings: number;
+  /** Cupom aplicado. */
+  coupon: { id: string; code: string; name: string; discount: number } | null;
+  /** Cupom digitado que não vale (o motivo); a conta sai sem ele. */
+  couponError: string | null;
+  /** Parte do cashback ganho que vem de campanha. */
+  campaignCashback: number;
+  /** Cliente faz aniversário este mês e tem cupom de aniversário para usar. */
+  birthdayCoupon: { code: string; name: string; summary: string } | null;
 }
 
 export interface SalePayment {
@@ -135,6 +157,10 @@ export interface Sale {
   discount: number;
   cashbackUsed: number;
   cashbackEarned: number;
+  couponCode: string | null;
+  couponDiscount: number;
+  promoSavings: number;
+  campaignCashback: number;
   total: number;
   /** Troco devolvido em dinheiro. */
   change: number;

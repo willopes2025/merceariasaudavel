@@ -17,7 +17,7 @@
     "db:migrate": "npm run db:migrate -w @mercearia/api",
     "db:deploy": "npm run db:deploy -w @mercearia/api",
     "db:seed": "npm run db:seed -w @mercearia/api",
-    "e2e": "node scripts/e2e-fase0.mjs && node scripts/e2e-loja.mjs && node scripts/e2e-app.mjs && node scripts/e2e-pedidos.mjs",
+    "e2e": "node scripts/e2e-fase0.mjs && node scripts/e2e-loja.mjs && node scripts/e2e-app.mjs && node scripts/e2e-pedidos.mjs && node scripts/e2e-campanhas.mjs",
     "dev": "npm run dev -w @mercearia/api & npm run dev -w @mercearia/web"
   },
   "devDependencies": {

@@ -85,6 +85,14 @@ export class ShopController {
     return this.shop.purchases(s);
   }
 
+  /** "Hora de repor": produtos que a cliente costuma comprar e devem estar acabando. */
+  @Get('me/repurchase')
+  @UseGuards(CustomerAuthGuard)
+  async repurchase(@Param('slug') slug: string, @CurrentCustomer() s: CustomerSession) {
+    await this.place(slug, s);
+    return this.shop.repurchase(slug, s);
+  }
+
   // ------------------------------------------------------------ pedidos
 
   /** Pedido da cliente logada: paga no caixa e vai para o preparo. */

@@ -186,7 +186,7 @@ export class OrdersService {
 
   private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null): Promise<Order> {
     // Mesma conta do caixa (preço de membro, montagem, regras): erro aqui = erro no caixa.
-    const quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0 });
+    const quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode: null });
     const kinds = await this.prisma.product.findMany({ where: { tenantId, id: { in: items.map((i) => i.productId) } }, select: { id: true, kind: true, unit: true, showInApp: true } });
     const hidden = kinds.find((k) => !k.showInApp || k.kind === 'insumo');
     if (hidden) throw new DomainError('PRODUCT_NOT_AVAILABLE', 'Um dos produtos não está disponível para pedido.');

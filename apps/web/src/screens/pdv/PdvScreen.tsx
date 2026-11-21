@@ -68,6 +68,7 @@ export function PdvScreen() {
   const [useCashback, setUseCashback] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [cpf, setCpf] = useState('');
+  const [coupon, setCoupon] = useState('');
   const [weighing, setWeighing] = useState<ProductOption | null>(null);
   const [picking, setPicking] = useState<ProductOption | null>(null);
   const [done, setDone] = useState<Sale | null>(null);
@@ -82,7 +83,7 @@ export function PdvScreen() {
   });
 
   const items = lines.map((l) => ({ productId: l.product.id, quantity: l.quantity, options: l.options }));
-  const quoteBody = { storeId, customerId: customer?.id ?? null, items, discount: toNumber(discount), useCashback: useCashback ? 1_000_000 : 0 };
+  const quoteBody = { storeId, customerId: customer?.id ?? null, items, discount: toNumber(discount), useCashback: useCashback ? 1_000_000 : 0, couponCode: coupon.trim() || null };
   const quote = useQuery({
     queryKey: ['sale-quote', JSON.stringify(quoteBody)],
     queryFn: () => api<SaleQuote>('/sales/quote', { method: 'POST', json: quoteBody }),
@@ -144,6 +145,7 @@ export function PdvScreen() {
     setUseCashback(false);
     setPayments([]);
     setCpf('');
+    setCoupon('');
   }
 
   const finish = useMutation({
@@ -236,7 +238,11 @@ export function PdvScreen() {
                           <td>
                             <span className="font-medium">{l.product.name}</span>
                             {l.optionNames.length > 0 && <div className="text-xs text-ink-soft">{l.optionNames.join(', ')}</div>}
-                            {line && line.unitPrice < line.listPrice && <span className="badge ml-2 bg-brand-soft text-brand">Preço de membro</span>}
+                            {line?.campaign ? (
+                              <span className="badge ml-2 bg-amber-100 text-amber-800">Oferta: {line.campaign.name}</span>
+                            ) : (
+                              line && line.unitPrice < line.listPrice && <span className="badge ml-2 bg-brand-soft text-brand">Preço de membro</span>
+                            )}
                             {line?.stockWarning && <div className="text-xs text-amber-700">Estoque: {line.stockWarning}</div>}
                           </td>
                           <td className="text-center">
@@ -282,6 +288,21 @@ export function PdvScreen() {
             <div className="card space-y-2 p-4 text-sm">
               <Row label="Produtos" value={formatMoney(q?.grossTotal ?? 0)} />
               {(q?.memberSavings ?? 0) > 0 && <Row label="Preço de membro" value={`− ${formatMoney(q!.memberSavings)}`} className="text-brand" />}
+              {(q?.promoSavings ?? 0) > 0 && <Row label="Ofertas" value={`− ${formatMoney(q!.promoSavings)}`} className="text-amber-700" />}
+              {q?.birthdayCoupon && !coupon && (
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <span>🎂 Aniversariante do mês: {q.birthdayCoupon.summary}.</span>
+                  <button className="font-semibold underline" onClick={() => { setCoupon(q.birthdayCoupon!.code); setPayments([]); }}>
+                    Aplicar
+                  </button>
+                </div>
+              )}
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-ink-soft">Cupom</span>
+                <input className="input w-36 text-right uppercase" value={coupon} onChange={(e) => { setCoupon(e.target.value.toUpperCase()); setPayments([]); }} placeholder="CÓDIGO" maxLength={20} />
+              </label>
+              {q?.couponError && coupon && <p className="text-xs text-red-600">{q.couponError}</p>}
+              {q?.coupon && <Row label={`Cupom ${q.coupon.code}`} value={`− ${formatMoney(q.coupon.discount)}`} className="text-brand" />}
               {can('sale.discount') && (
                 <label className="flex items-center justify-between gap-3">
                   <span className="text-ink-soft">Desconto (R$)</span>
@@ -301,7 +322,11 @@ export function PdvScreen() {
                 <span className="font-medium">Total</span>
                 <span className="text-3xl font-bold tabular-nums">{formatMoney(total)}</span>
               </div>
-              {(q?.cashbackEarned ?? 0) > 0 && <p className="text-xs text-brand">A cliente ganha {formatMoney(q!.cashbackEarned)} de cashback nesta compra.</p>}
+              {(q?.cashbackEarned ?? 0) > 0 && (
+                <p className="text-xs text-brand">
+                  A cliente ganha {formatMoney(q!.cashbackEarned)} de cashback nesta compra{q!.campaignCashback > 0 ? ` (${formatMoney(q!.campaignCashback)} da campanha)` : ''}.
+                </p>
+              )}
             </div>
 
             <div className="card space-y-3 p-4">
@@ -334,7 +359,7 @@ export function PdvScreen() {
               <ErrorBox error={finish.error} />
               <button
                 className="btn-primary w-full py-3 text-base"
-                disabled={!lines.length || !q || quote.isFetching || Boolean(check.error) || (total > 0 && !payments.length) || finish.isPending}
+                disabled={!lines.length || !q || quote.isFetching || Boolean(check.error) || (total > 0 && !payments.length) || finish.isPending || Boolean(coupon && q?.couponError)}
                 onClick={() => finish.mutate()}
               >
                 {finish.isPending ? 'Finalizando…' : 'Finalizar venda'}

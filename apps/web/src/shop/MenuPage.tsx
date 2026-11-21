@@ -4,7 +4,7 @@ import { formatMoney, type Order, type ShopCatalog, type ShopInfo, type ShopProd
 import { OptionPicker } from '../components/OptionPicker';
 import { shopApi } from './api';
 import { useCart } from './cart';
-import { Catalog, Leaf, Qr, Spinner, saving } from './parts';
+import { Catalog, Leaf, Qr, Spinner, effectivePrice, saving } from './parts';
 
 const client = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 2 } } });
 
@@ -134,8 +134,8 @@ function Menu() {
           big
           title={picking.name}
           groups={picking.optionGroups}
-          basePrice={picking.price}
-          memberPrice={picking.memberPrice}
+          basePrice={effectivePrice(picking, false)}
+          memberPrice={effectivePrice(picking, true)}
           onClose={() => setPicking(null)}
           onConfirm={(picked, qty) => {
             cart.add(picking, qty, picked);

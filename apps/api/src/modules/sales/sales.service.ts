@@ -28,6 +28,7 @@ import { CashService } from '../cash/cash.service';
 import { clubRules, moveCashback, type ClubRules } from '../customers/cashback';
 import { FiscalService } from '../fiscal/fiscal.service';
 import { q3, returnSaleStock, stockStoreOf, takeStock } from '../products/stock';
+import { bestOffer, birthdaySuggestion, checkCoupon, couponCents, lineInScope, runningCampaigns } from './campaign-engine';
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaService;
@@ -61,6 +62,7 @@ const saleInclude = {
   items: { orderBy: { position: 'asc' } },
   payments: { orderBy: { createdAt: 'asc' }, include: { method: { select: { name: true, kind: true } }, reversal: { select: { id: true } } } },
   order: { select: { id: true, number: true, status: true } },
+  coupon: { select: { code: true } },
 } satisfies Prisma.SaleInclude;
 type SaleFull = Prisma.SaleGetPayload<{ include: typeof saleInclude }>;
 
@@ -112,7 +114,8 @@ export class SalesService {
           if (order.status !== 'aguardando_pagamento') throw new ConflictError('ORDER_NOT_PENDING', 'Esse pedido já foi cobrado ou cancelado.');
           if (order.store_id !== input.storeId) throw new DomainError('ORDER_OTHER_STORE', 'Esse pedido é de outra loja.');
         }
-        const { quote, lines } = await this.compute(tx, ctx.tenantId, input);
+        const { quote, lines } = await this.compute(tx, ctx.tenantId, input, { lockCoupon: true });
+        if (input.couponCode && quote.couponError) throw new DomainError('COUPON_INVALID', quote.couponError);
         const { change, error } = changeFor(quote.total, input.payments.map((p) => ({ amount: p.amount, kind: kindOf(p.methodId) })));
         if (error) throw new DomainError('PAYMENT_MISMATCH', error);
         if (quote.total > 0 && !input.payments.length) throw new DomainError('PAYMENT_MISSING', 'Informe como a cliente pagou.');
@@ -131,7 +134,12 @@ export class SalesService {
             memberPricing: quote.member,
             grossTotal: quote.grossTotal,
             memberSavings: quote.memberSavings,
-            discount: quote.discount,
+            // Desconto total = manual + cupom (a nota rateia tudo nos itens).
+            discount: Math.round((quote.discount + (quote.coupon?.discount ?? 0)) * 100) / 100,
+            couponId: quote.coupon?.id ?? null,
+            couponDiscount: quote.coupon?.discount ?? 0,
+            promoSavings: quote.promoSavings,
+            campaignCashback: quote.campaignCashback,
             total: quote.total,
             cashbackUsed: quote.cashbackUsed,
             cashbackEarned: quote.cashbackEarned,
@@ -154,6 +162,8 @@ export class SalesService {
                 total: l.total,
                 unitCost: l.unitCost,
                 options: l.options.length ? (l.options as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+                campaignId: l.campaign?.id ?? null,
+                promoSavings: l.promoSavings,
               })),
             },
           },
@@ -342,7 +352,7 @@ export class SalesService {
   // ------------------------------------------------------------ cálculo
 
   /** Preço, preço de membro, desconto, cashback e total — a única conta da venda. */
-  private async compute(db: Db, tenantId: string, input: SaleQuoteInput): Promise<Computed> {
+  private async compute(db: Db, tenantId: string, input: SaleQuoteInput, opts: { lockCoupon?: boolean } = {}): Promise<Computed> {
     const ids = [...new Set(input.items.map((i) => i.productId))];
     const supplySelect = { id: true, name: true, cost: true, trackStock: true, trackLots: true, unit: true, balances: true } as const;
     const [products, customer, rules, storeId, groups] = await Promise.all([
@@ -361,6 +371,7 @@ export class SalesService {
     ]);
     if (input.customerId && !customer) throw new DomainError('CUSTOMER_NOT_FOUND', 'Cliente não encontrada.');
     const member = Boolean(customer?.isMember);
+    const campaigns = await runningCampaigns(db as Tx, tenantId);
 
     const used = new Map<string, number>();
     const lines: Computed['lines'] = input.items.map((item) => {
@@ -392,11 +403,15 @@ export class SalesService {
 
       const baseList = Number(p.price);
       const baseUnit = member && p.memberPrice != null && Number(p.memberPrice) < baseList ? Number(p.memberPrice) : baseList;
+      // Oferta: preço promocional quando é menor do que a cliente já pagaria.
+      const offer = bestOffer(campaigns, p.id, member);
+      const promo = offer && offer.price < baseUnit ? offer : null;
       // Adicional custa igual para membro e não membro.
       const listPrice = (cents(baseList) + extrasCents) / 100;
-      const unitPrice = (cents(baseUnit) + extrasCents) / 100;
+      const unitPrice = (cents(promo ? promo.price : baseUnit) + extrasCents) / 100;
       const totalCents = Math.round(unitPrice * 100 * item.quantity);
       const listCents = Math.round(listPrice * 100 * item.quantity);
+      const memberCents = Math.round((cents(baseUnit) + extrasCents) * item.quantity);
       const recipe: Supply[] = p.recipe.map((r) => ({ ingredientId: r.ingredientId, quantity: Number(r.quantity), cost: Number(r.ingredient.cost), trackStock: r.ingredient.trackStock, trackLots: r.ingredient.trackLots }));
       const unitCost = (p.kind === 'preparado' ? recipe.reduce((s, r) => s + r.quantity * r.cost, 0) : Number(p.cost)) + extras.reduce((s, x) => s + x.quantity * x.cost, 0);
 
@@ -421,9 +436,11 @@ export class SalesService {
         quantity: item.quantity,
         listPrice,
         unitPrice,
-        memberSavings: (listCents - totalCents) / 100,
+        memberSavings: (listCents - memberCents) / 100,
         total: totalCents / 100,
         stockWarning,
+        campaign: promo ? { id: promo.campaign.id, name: promo.campaign.name } : null,
+        promoSavings: (memberCents - totalCents) / 100,
         categoryId: p.categoryId,
         unitCost: Math.round(unitCost * 10000) / 10000,
         trackStock: p.trackStock,
@@ -438,10 +455,32 @@ export class SalesService {
     const discountCents = cents(input.discount);
     if (discountCents > subtotalCents) throw new DomainError('DISCOUNT_TOO_BIG', 'O desconto é maior que a compra.');
     const afterDiscount = subtotalCents - discountCents;
+    // Cupom: confere e desconta depois do desconto manual.
+    let coupon: SaleQuote['coupon'] = null;
+    let couponError: string | null = null;
+    if (input.couponCode) {
+      const check = await checkCoupon(db as Tx, tenantId, input.couponCode, customer, subtotalCents / 100, opts.lockCoupon);
+      if (check.campaign) {
+        const off = couponCents(check.campaign, afterDiscount);
+        coupon = { id: check.campaign.id, code: check.campaign.code!, name: check.campaign.name, discount: off / 100 };
+      } else couponError = check.error;
+    }
+    const afterCoupon = afterDiscount - cents(coupon?.discount ?? 0);
     const balance = cents(customer?.cashbackBalance);
-    const cashbackAvailable = customer ? Math.min(balance, Math.floor((afterDiscount * rules.cashbackMaxUsePct) / 100)) : 0;
+    const cashbackAvailable = customer ? Math.min(balance, Math.floor((afterCoupon * rules.cashbackMaxUsePct) / 100)) : 0;
     const cashbackUsed = Math.min(cents(input.useCashback), cashbackAvailable);
-    const total = afterDiscount - cashbackUsed;
+    const total = afterCoupon - cashbackUsed;
+    // Cashback turbinado: +% nas linhas da campanha (a maior, se houver mais de uma), sobre o que foi pago.
+    let campaignCashback = 0;
+    if (member && total > 0 && subtotalCents > 0) {
+      const boosts = campaigns.filter((c) => c.type === 'cashback' && c.extraCashbackPct);
+      const weighted = lines.reduce((sum, l) => {
+        const pct = Math.max(0, ...boosts.filter((c) => lineInScope(c, l.productId, l.categoryId)).map((c) => c.extraCashbackPct!));
+        return sum + cents(l.total) * pct;
+      }, 0);
+      campaignCashback = Math.floor(((weighted / 100) * total) / subtotalCents);
+    }
+    const birthdayCoupon = !coupon ? await birthdaySuggestion(db as Tx, tenantId, customer) : null;
     const wouldSave = member
       ? 0
       : input.items.reduce((s, i) => {
@@ -456,13 +495,18 @@ export class SalesService {
         customer: customer ? { id: customer.id, name: customer.name, cashbackBalance: balance / 100 } : null,
         items: lines.map(({ categoryId: _c, unitCost: _u, trackStock: _t, trackLots: _l, recipe: _r, extras: _x, ...l }) => l),
         grossTotal: grossCents / 100,
-        memberSavings: (grossCents - subtotalCents) / 100,
+        memberSavings: lines.reduce((sum, l) => sum + cents(l.memberSavings), 0) / 100,
         discount: discountCents / 100,
         cashbackUsed: cashbackUsed / 100,
         cashbackAvailable: cashbackAvailable / 100,
         total: total / 100,
-        cashbackEarned: member ? earned(total, rules) / 100 : 0,
+        cashbackEarned: member ? (earned(total, rules) + campaignCashback) / 100 : 0,
         wouldSaveAsMember: wouldSave / 100,
+        promoSavings: lines.reduce((sum, l) => sum + cents(l.promoSavings), 0) / 100,
+        coupon,
+        couponError,
+        campaignCashback: campaignCashback / 100,
+        birthdayCoupon,
       },
     };
   }
@@ -513,6 +557,10 @@ function toSale(s: SaleFull, doc: { id: string; status: string; number: string |
     discount: Number(s.discount),
     cashbackUsed: Number(s.cashbackUsed),
     cashbackEarned: Number(s.cashbackEarned),
+    couponCode: s.coupon?.code ?? null,
+    couponDiscount: Number(s.couponDiscount),
+    promoSavings: Number(s.promoSavings),
+    campaignCashback: Number(s.campaignCashback),
     total: Number(s.total),
     change: changeNote ? Number(changeNote.replace(',', '.')) : paid > cents(s.total) ? (paid - cents(s.total)) / 100 : 0,
     payments: s.payments.map((p) => ({ id: p.id, methodName: p.method?.name ?? '—', kind: (p.method?.kind as PaymentKind | undefined) ?? null, amount: Number(p.amount), reversed: Boolean(p.reversal) })),

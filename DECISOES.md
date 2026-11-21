@@ -41,6 +41,19 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Totem identifica membro por celular ou código do cartão, sem PIN (só dá o preço de membro, que é grátis).
 - Painel de retirada é público: só número e primeiro nome.
 
+## Campanhas e recompra (Fase 3a)
+- Ordem da conta: preço (membro ou normal) → oferta (só se for menor) → desconto manual → cupom → cashback usado.
+  `sale.discount` = manual + cupom (a NFC-e rateia); `coupon_discount` guarda a parte do cupom.
+- Economia de membro e economia de oferta ficam separadas (`member_savings` × `promo_savings`).
+- Cupom inválido não quebra o orçamento (mostra o motivo); na venda, recusa (`COUPON_INVALID`).
+  A linha do cupom é travada na venda para o limite de usos não estourar. Venda cancelada devolve o uso.
+- Cupom de aniversariante: vale no mês do aniversário, 1 vez por ano (a menos que diga outro limite).
+- Cashback turbinado só para membro, soma ao do clube; com duas campanhas na mesma linha vale a maior.
+- Campanha não se apaga (vendas apontam para ela): liga/desliga.
+- Recompra: intervalo = mediana entre as compras da cliente (com 2+ compras, ignorando compras a menos de 3 dias);
+  sem histórico, a duração do produto. Lista quem vence em até N dias ou atrasou até 45 dias (depois disso é "sumida").
+- WhatsApp por link (wa.me) com a mensagem pronta; o disparo automático entra quando o WhatsApp for integrado.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

@@ -43,6 +43,8 @@ const CustomerApp = screen(() => import('./shop/CustomerApp'), (m) => m.Customer
 const MenuPage = screen(() => import('./shop/MenuPage'), (m) => m.MenuPage);
 const KitchenBoard = screen(() => import('./screens/orders/KitchenBoard'), (m) => m.KitchenBoard);
 const PickupPage = screen(() => import('./shop/PickupPage'), (m) => m.PickupPage);
+const GrowthScreen = screen(() => import('./screens/growth/GrowthScreen'), (m) => m.GrowthScreen);
+const CampaignsScreen = screen(() => import('./screens/growth/CampaignsScreen'), (m) => m.CampaignsScreen);
 const AppLinksScreen = screen(() => import('./screens/shop/AppLinksScreen'), (m) => m.AppLinksScreen);
 const PdvScreen = screen(() => import('./screens/pdv/PdvScreen'), (m) => m.PdvScreen);
 const SalesScreen = screen(() => import('./screens/sales/SalesScreen'), (m) => m.SalesScreen);
@@ -128,6 +130,8 @@ export function App() {
             <Route path="caixa" element={<CashScreen />} />
             <Route path="app-cardapio" element={<AppLinksScreen />} />
             <Route path="preparo" element={<KitchenBoard />} />
+            <Route path="recompra" element={<GrowthScreen />} />
+            <Route path="campanhas" element={<CampaignsScreen />} />
             <Route path="produtos" element={<ProductsScreen />} />
             <Route path="estoque" element={<ProductsScreen key="estoque" stockView />} />
             <Route path="validades" element={<ExpiringScreen />} />

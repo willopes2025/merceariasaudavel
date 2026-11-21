@@ -18,6 +18,8 @@ import { ManagementModule } from './modules/management/management.module';
 import { NotifyModule } from './modules/notify/notify.module';
 import { ProductsModule } from './modules/products/products.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { GrowthModule } from './modules/growth/growth.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { TenancyModule } from './modules/tenancy/tenancy.module';
@@ -47,6 +49,8 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     ManagementModule,
     OrdersModule,
     ShopModule,
+    CampaignsModule,
+    GrowthModule,
   ],
   controllers: [HealthController],
   providers: [

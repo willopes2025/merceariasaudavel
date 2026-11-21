@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SaleLineInput, ShopProduct } from '@mercearia/contracts';
 import type { PickedOptions } from '../components/OptionPicker';
+import { effectivePrice } from './parts';
 
 export interface CartLine {
   key: string;
@@ -44,7 +45,7 @@ export function useCart(storageKey: string) {
   const clear = useCallback(() => setLines([]), []);
 
   const count = lines.reduce((s, l) => s + l.quantity, 0);
-  const total = (member: boolean) => round(lines.reduce((s, l) => s + ((member ? l.product.memberPrice : l.product.price) + l.extras) * l.quantity, 0));
+  const total = (member: boolean) => round(lines.reduce((s, l) => s + (effectivePrice(l.product, member) + l.extras) * l.quantity, 0));
   const items: SaleLineInput[] = lines.map((l) => ({ productId: l.product.id, quantity: l.quantity, options: l.options }));
   return { lines, add, setQty, clear, count, total, items };
 }

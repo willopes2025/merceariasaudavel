@@ -51,6 +51,11 @@ export const shopSignupSchema = z.object({
     .nullable()
     .transform((v) => v ?? null),
   allowWhatsapp: z.boolean().default(true),
+  birthDate: z
+    .string()
+    .nullish()
+    .transform((v) => v || null)
+    .refine((v) => v === null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '1900-01-01' && Date.parse(v) <= Date.now()), 'Data de nascimento inválida'),
   acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Aceite as regras do clube para continuar' }) }),
 });
 export type ShopSignupInput = z.infer<typeof shopSignupSchema>;
@@ -85,6 +90,11 @@ export const shopProfileSchema = z.object({
     .nullable()
     .transform((v) => v ?? null),
   allowWhatsapp: z.boolean(),
+  birthDate: z
+    .string()
+    .nullish()
+    .transform((v) => v || null)
+    .refine((v) => v === null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '1900-01-01' && Date.parse(v) <= Date.now()), 'Data de nascimento inválida'),
 });
 export type ShopProfileInput = z.infer<typeof shopProfileSchema>;
 
@@ -98,6 +108,15 @@ export interface ShopInfo {
   club: { cashbackPct: number; cashbackDays: number; cashbackMaxUsePct: number };
   /** App e totem aceitam pedido (paga no caixa). */
   ordersEnabled: boolean;
+  /** Campanhas rodando (ofertas e cashback turbinado; cupom não aparece). */
+  campaigns: Array<{ id: string; name: string; type: 'cashback' | 'oferta'; description: string | null; until: string; membersOnly: boolean; extraCashbackPct: number | null }>;
+}
+
+/** "Hora de repor": produto que a cliente costuma comprar e deve estar acabando. */
+export interface ShopRepurchase {
+  product: ShopProduct;
+  lastPurchase: string;
+  dueDate: string;
 }
 
 export interface ShopProduct {
@@ -116,6 +135,8 @@ export interface ShopProduct {
   available: boolean;
   /** Montagem (sabor, adicionais) para pedir pelo app/totem. */
   optionGroups: OptionGroupView[];
+  /** Oferta rodando agora (preço promocional). */
+  offer: { name: string; price: number; membersOnly: boolean; until: string } | null;
 }
 
 export interface ShopCatalog {
@@ -136,6 +157,7 @@ export interface ShopMe {
   email: string | null;
   goal: CustomerGoal | null;
   allowWhatsapp: boolean;
+  birthDate: string | null;
   memberCode: string;
   memberSince: string | null;
   cashbackBalance: number;

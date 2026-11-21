@@ -186,7 +186,7 @@ export function ProductsScreen({ stockView = false }: { stockView?: boolean }) {
   );
 }
 
-const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', description: '', imageUrl: '', showInApp: true, active: true };
+const empty: ProductForm = { name: '', kind: 'revenda', categoryId: null, brand: '', sku: '', barcode: '', unit: 'UN', soldByWeight: false, price: '' as unknown as number, memberPrice: null, cost: '' as unknown as number, trackStock: true, trackLots: false, minStock: 0, sellable: true, ncm: '', cest: '', supplier: '', description: '', imageUrl: '', showInApp: true, repurchaseDays: null, active: true };
 
 function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: (p: ProductDetail) => void }) {
   const categories = useCategories();
@@ -277,6 +277,11 @@ function ProductFormDrawer({ product, onClose, onSaved }: { product: Product | n
         <Field label="CEST">
           <input className="input" inputMode="numeric" value={f.cest ?? ''} onChange={(e) => set('cest', e.target.value)} />
         </Field>
+        {f.kind === 'revenda' && (
+          <Field label="Dura em média (dias)" hint="Para o aviso de recompra: whey 900 g ≈ 30. Vazio = usa o ritmo de cada cliente.">
+            <input className="input" inputMode="numeric" value={f.repurchaseDays == null ? '' : String(f.repurchaseDays)} onChange={(e) => set('repurchaseDays', e.target.value.replace(/\D/g, '') || null)} />
+          </Field>
+        )}
         {f.kind !== 'insumo' && (
           <>
             <div className="sm:col-span-2">

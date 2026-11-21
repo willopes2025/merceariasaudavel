@@ -17,6 +17,7 @@ import {
   type ShopProduct,
   type ShopProfileInput,
   type ShopPurchase,
+  type ShopRepurchase,
   type ShopSignupInput,
   type Unit,
 } from '@mercearia/contracts';
@@ -27,6 +28,8 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { clubRules } from '../customers/cashback';
 import { ensureMemberCode } from '../customers/member-code';
 import { loadOptionGroups } from '../products/options';
+import { computeRepurchase } from '../growth/repurchase';
+import { bestOffer, runningCampaigns } from '../sales/campaign-engine';
 import type { CustomerSession } from './customer-auth';
 
 const LOCK_AFTER = 5;
@@ -97,7 +100,9 @@ export class ShopService {
   async info(slug: string): Promise<ShopInfo> {
     const t = await this.tenant(slug);
     const [club, settings] = await Promise.all([clubRules(this.prisma, t.tenantId), this.prisma.tenantSetting.findUnique({ where: { tenantId: t.tenantId }, select: { ordersEnabled: true } })]);
-    return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club, ordersEnabled: Boolean(t.storeId) && (settings?.ordersEnabled ?? true) };
+    const running = await runningCampaigns(this.prisma, t.tenantId);
+    const campaigns = running.map((c) => ({ id: c.id, name: c.name, type: c.type as 'cashback' | 'oferta', description: c.description, until: c.endsOn, membersOnly: c.type === 'cashback' || c.audience === 'membros', extraCashbackPct: c.extraCashbackPct }));
+    return { slug, name: t.name, storeName: t.storeName, phone: t.phone, address: t.address, club, ordersEnabled: Boolean(t.storeId) && (settings?.ordersEnabled ?? true), campaigns };
   }
 
   async catalog(slug: string): Promise<ShopCatalog> {
@@ -115,6 +120,7 @@ export class ShopService {
         : [];
     const stock = new Map(balances.map((b) => [b.productId, Number(b.quantity)]));
     const groups = await loadOptionGroups(this.prisma, t.tenantId, products.map((p) => p.id));
+    const running = await runningCampaigns(this.prisma, t.tenantId);
     const categories = new Map<string, string>();
     const items: ShopProduct[] = products.map((p) => {
       if (p.category?.active) categories.set(p.category.id, p.category.name);
@@ -133,6 +139,13 @@ export class ShopService {
         memberPrice: member,
         available: !p.trackStock || p.kind === 'preparado' || (stock.get(p.id) ?? 0) > 0,
         optionGroups: groups.get(p.id) ?? [],
+        offer: (() => {
+          // A melhor oferta que alguém pode ter (membro ou todos), se baixar o preço.
+          const best = bestOffer(running, p.id, true);
+          if (!best || best.price >= price) return null;
+          const open = bestOffer(running, p.id, false);
+          return open && open.price < price ? { name: open.campaign.name, price: open.price, membersOnly: false, until: open.campaign.endsOn } : { name: best.campaign.name, price: best.price, membersOnly: true, until: best.campaign.endsOn };
+        })(),
       };
     });
     return {
@@ -195,6 +208,7 @@ export class ShopService {
             document: existing.document ?? input.document,
             goal: input.goal ?? existing.goal,
             allowWhatsapp: input.allowWhatsapp,
+            birthDate: existing.birthDate ?? (input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null),
           },
         });
       } else {
@@ -206,6 +220,7 @@ export class ShopService {
             document: input.document,
             goal: input.goal,
             allowWhatsapp: input.allowWhatsapp,
+            birthDate: input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null,
             isMember: true,
             memberSince: new Date(),
             memberSource: 'app',
@@ -287,6 +302,7 @@ export class ShopService {
       email: c.email,
       goal: (c.goal && c.goal in CUSTOMER_GOALS ? c.goal : null) as CustomerGoal | null,
       allowWhatsapp: c.allowWhatsapp,
+      birthDate: c.birthDate?.toISOString().slice(0, 10) ?? null,
       memberCode,
       memberSince: c.memberSince?.toISOString() ?? null,
       cashbackBalance: Number(c.cashbackBalance),
@@ -307,6 +323,7 @@ export class ShopService {
         email: input.email,
         goal: input.goal,
         allowWhatsapp: input.allowWhatsapp,
+        birthDate: input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null,
         searchText: normalizeText([input.name, c.document, c.phone, input.email].filter(Boolean).join(' ')),
       },
     });
@@ -350,6 +367,19 @@ export class ShopService {
       status: x.status,
       items: x.items.map((i) => ({ name: i.description, quantity: Number(i.quantity), unit: i.unit, total: Number(i.total) })),
     }));
+  }
+
+  async repurchase(slug: string, s: CustomerSession): Promise<ShopRepurchase[]> {
+    const due = await computeRepurchase(this.prisma, s.tenantId, { customerId: s.customerId, ahead: 7, lateMax: 60 });
+    if (!due.length) return [];
+    const catalog = await this.catalog(slug);
+    return due
+      .map((d) => {
+        const product = catalog.products.find((p) => p.id === d.productId);
+        return product ? { product, lastPurchase: d.lastPurchase, dueDate: d.dueDate } : null;
+      })
+      .filter((r): r is ShopRepurchase => r !== null)
+      .slice(0, 6);
   }
 
   // ---------------------------------------------------------------- apoio

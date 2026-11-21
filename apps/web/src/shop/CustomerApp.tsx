@@ -15,12 +15,13 @@ import {
   type ShopMe,
   type ShopProduct,
   type ShopPurchase,
+  type ShopRepurchase,
 } from '@mercearia/contracts';
 import { OptionPicker } from '../components/OptionPicker';
 import { useCart, type CartLine } from './cart';
 import { ApiError } from '../lib/api';
 import { customerSession, shopApi, whenCustomerSessionExpires } from './api';
-import { Catalog, Leaf, ProductCard, Qr, Spinner, saving } from './parts';
+import { Catalog, Leaf, ProductCard, Qr, Spinner, effectivePrice, saving } from './parts';
 
 const client = new QueryClient({
   defaultOptions: {
@@ -130,13 +131,13 @@ function ErrorLine({ error }: { error: unknown }) {
 }
 
 function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; club?: ShopInfo['club'] }) {
-  const [f, setF] = useState({ name: '', phone: '', document: '', pin: '', pin2: '', goal: '' as CustomerGoal | '', allowWhatsapp: true, acceptTerms: false });
+  const [f, setF] = useState({ name: '', phone: '', document: '', birthDate: '', pin: '', pin2: '', goal: '' as CustomerGoal | '', allowWhatsapp: true, acceptTerms: false });
   const [local, setLocal] = useState<string | null>(null);
   const m = useMutation({
     mutationFn: () =>
       shopApi<ShopLoginResult>('/signup', {
         method: 'POST',
-        json: { name: f.name, phone: f.phone, document: f.document || null, pin: f.pin, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp, acceptTerms: f.acceptTerms },
+        json: { name: f.name, phone: f.phone, document: f.document || null, birthDate: f.birthDate || null, pin: f.pin, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp, acceptTerms: f.acceptTerms },
       }),
     onSuccess: onDone,
   });
@@ -159,6 +160,7 @@ function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; cl
         inputMode="numeric"
         hint={needsCpf ? 'Já compra com a gente? Use o mesmo CPF do seu cadastro na loja.' : 'Para a nota fiscal sair no seu nome.'}
       />
+      <Input label="Data de nascimento (opcional)" type="date" value={f.birthDate} onChange={(e) => setF({ ...f, birthDate: e.target.value })} hint="No mês do seu aniversário tem presente." />
       <div className="grid grid-cols-2 gap-3">
         <Input label="Crie um PIN" type="password" value={f.pin} onChange={(e) => setF({ ...f, pin: onlyDigits(e.target.value) })} {...pinProps} required />
         <Input label="Repita o PIN" type="password" value={f.pin2} onChange={(e) => setF({ ...f, pin2: onlyDigits(e.target.value) })} {...pinProps} required />
@@ -267,8 +269,8 @@ function Shell({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; 
           <OptionPicker
             title={picking.name}
             groups={picking.optionGroups}
-            basePrice={picking.price}
-            memberPrice={picking.memberPrice}
+            basePrice={effectivePrice(picking, false)}
+            memberPrice={effectivePrice(picking, true)}
             onClose={() => setPicking(null)}
             onConfirm={(picked, qty) => {
               cart.add(picking, qty, picked);
@@ -309,7 +311,7 @@ function CartLines({ cart, member }: { cart: Cart; member: boolean }) {
           <div className="flex-1">
             <p className="font-medium text-ink">{l.product.name}</p>
             {l.optionNames.length > 0 && <p className="text-xs text-ink-soft">{l.optionNames.join(', ')}</p>}
-            <p className="text-sm text-brand">{formatMoney(((member ? l.product.memberPrice : l.product.price) + l.extras) * l.quantity)}</p>
+            <p className="text-sm text-brand">{formatMoney((effectivePrice(l.product, member) + l.extras) * l.quantity)}</p>
           </div>
           <div className="flex items-center rounded-xl border border-slate-300">
             <button className="px-3 py-1.5 text-lg" onClick={() => cart.setQty(l.key, l.quantity - 1)} aria-label="Menos">
@@ -542,6 +544,8 @@ function Home({ me, onAdd }: { me: ShopMe; onAdd?: (p: ShopProduct) => void }) {
       <ActiveOrders />
       <MemberCard me={me} />
       <InstallHint />
+      <CampaignBanner />
+      <Repurchase onAdd={onAdd} />
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-white p-4 shadow-sm">
           <p className="text-xs font-medium text-ink-soft">Seu cashback</p>
@@ -694,10 +698,10 @@ function Empty({ children }: { children: ReactNode }) {
 function Account({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; onToken: (r: ShopLoginResult) => void }) {
   const qc = useQueryClient();
   const info = useInfo();
-  const [f, setF] = useState({ name: me.name, email: me.email ?? '', goal: (me.goal ?? '') as CustomerGoal | '', allowWhatsapp: me.allowWhatsapp });
+  const [f, setF] = useState({ name: me.name, email: me.email ?? '', birthDate: me.birthDate ?? '', goal: (me.goal ?? '') as CustomerGoal | '', allowWhatsapp: me.allowWhatsapp });
   const [saved, setSaved] = useState(false);
   const save = useMutation({
-    mutationFn: () => shopApi<ShopMe>('/me', { method: 'PUT', json: { name: f.name, email: f.email || null, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp } }),
+    mutationFn: () => shopApi<ShopMe>('/me', { method: 'PUT', json: { name: f.name, email: f.email || null, birthDate: f.birthDate || null, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp } }),
     onSuccess: (data) => {
       qc.setQueryData(['shop', 'me'], data);
       setSaved(true);
@@ -717,6 +721,7 @@ function Account({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void
       >
         <Input label="Nome" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required />
         <Input label="E-mail (opcional)" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+        <Input label="Data de nascimento" type="date" value={f.birthDate} onChange={(e) => setF({ ...f, birthDate: e.target.value })} />
         <p className="text-sm text-ink-soft">Celular: {formatPhone(me.phone)} (para trocar, fale com a loja)</p>
         <label className="block">
           <span className="text-sm font-medium text-ink">Objetivo</span>
@@ -877,5 +882,44 @@ function InstallHint() {
         ×
       </button>
     </div>
+  );
+}
+
+/** Campanhas rodando (cashback turbinado e ofertas). */
+function CampaignBanner() {
+  const info = useInfo();
+  const list = info.data?.campaigns ?? [];
+  if (!list.length) return null;
+  return (
+    <div className="space-y-2">
+      {list.slice(0, 3).map((c) => (
+        <div key={c.id} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {c.type === 'cashback' ? `+${(c.extraCashbackPct ?? 0).toLocaleString('pt-BR')}% de cashback · ` : '🔥 '}
+            {c.name}
+          </p>
+          <p className="text-xs text-amber-800">
+            {c.description ?? (c.type === 'cashback' ? 'Cashback a mais para membro nas compras da campanha.' : 'Preço promocional nos produtos marcados como oferta.')} Até {c.until.split('-').reverse().join('/')}.
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Hora de repor: o que ela costuma comprar e deve estar acabando. */
+function Repurchase({ onAdd }: { onAdd?: (p: ShopProduct) => void }) {
+  const due = useQuery({ queryKey: ['shop', 'repurchase'], queryFn: () => shopApi<ShopRepurchase[]>('/me/repurchase'), staleTime: 5 * 60_000 });
+  if (!due.data?.length) return null;
+  return (
+    <section>
+      <h2 className="mb-1 font-bold text-ink">Hora de repor?</h2>
+      <p className="mb-2 text-xs text-ink-soft">Pelas suas compras, estes devem estar acabando.</p>
+      <div className="grid grid-cols-2 gap-3">
+        {due.data.map((r) => (
+          <ProductCard key={r.product.id} p={r.product} onAdd={onAdd} />
+        ))}
+      </div>
+    </section>
   );
 }

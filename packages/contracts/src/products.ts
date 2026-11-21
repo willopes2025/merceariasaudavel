@@ -108,6 +108,8 @@ export const productSchema = z
       .transform((v) => v || null)
       .refine((v) => v === null || /^https:\/\/\S+$/.test(v), 'A foto precisa ser um link https'),
     showInApp: z.boolean().default(true),
+    /** Dura em média (dias): base do aviso de recompra. */
+    repurchaseDays: z.preprocess((v) => (v === '' || v == null ? null : Number(v)), z.number().int().min(1, 'Mínimo 1 dia').max(365, 'No máximo 365 dias').nullable()).default(null),
     active: z.boolean().default(true),
   })
   .refine((p) => p.memberPrice == null || p.memberPrice <= p.price, { path: ['memberPrice'], message: 'O preço de membro tem que ser menor ou igual ao preço normal' })
@@ -147,6 +149,7 @@ export interface Product {
   description: string | null;
   imageUrl: string | null;
   showInApp: boolean;
+  repurchaseDays: number | null;
   active: boolean;
   stock: StockByStore[];
   totalStock: number;

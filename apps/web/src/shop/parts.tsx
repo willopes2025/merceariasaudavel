@@ -26,8 +26,15 @@ export function Qr({ value, size = 168, className }: { value: string; size?: num
   return <div className={className} style={{ width: size, height: size }} aria-label={`QR code ${value}`} role="img" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-/** Quanto o membro economiza neste produto (0 = sem preço de membro). */
-export const saving = (p: ShopProduct) => Math.max(0, Math.round((p.price - p.memberPrice) * 100) / 100);
+/** Preço que a cliente paga (membro ou não), com a oferta da vez. */
+export function effectivePrice(p: ShopProduct, member: boolean): number {
+  let v = member ? p.memberPrice : p.price;
+  if (p.offer && (member || !p.offer.membersOnly)) v = Math.min(v, p.offer.price);
+  return v;
+}
+
+/** Quanto o membro economiza neste produto (preço de membro e oferta). */
+export const saving = (p: ShopProduct) => Math.max(0, Math.round((p.price - effectivePrice(p, true)) * 100) / 100);
 
 function unitLabel(p: ShopProduct) {
   return p.soldByWeight ? '/kg' : p.unit !== 'UN' ? `/${p.unit.toLowerCase()}` : '';
@@ -47,7 +54,11 @@ export function ProductCard({ p, big, onAdd }: { p: ShopProduct; big?: boolean; 
             <Leaf className="h-12 w-12 opacity-70" />
           </div>
         )}
-        {pctOff > 0 && <span className="absolute left-2 top-2 rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">-{pctOff}% membro</span>}
+        {p.offer ? (
+          <span className="absolute left-2 top-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">Oferta{p.offer.membersOnly ? ' membro' : ''}</span>
+        ) : (
+          pctOff > 0 && <span className="absolute left-2 top-2 rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">-{pctOff}% membro</span>
+        )}
         {!p.available && <span className="absolute right-2 top-2 rounded-full bg-ink/80 px-2 py-0.5 text-xs font-medium text-white">Esgotado</span>}
       </div>
       <div className="flex flex-1 flex-col p-3">
@@ -56,7 +67,19 @@ export function ProductCard({ p, big, onAdd }: { p: ShopProduct; big?: boolean; 
         {p.description && big && <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{p.description}</p>}
         {p.optionGroups.length > 0 && <p className="mt-1 text-[11px] font-medium text-brand">Monte do seu jeito</p>}
         <div className="mt-auto pt-2">
-          {off > 0 ? (
+          {p.offer ? (
+            <>
+              <p className="text-xs text-ink-soft">
+                Normal <span className="line-through">{formatMoney(p.price)}</span>
+                {!p.offer.membersOnly && p.memberPrice < p.price && p.memberPrice < p.offer.price && <span> · membro {formatMoney(p.memberPrice)}</span>}
+              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Oferta{p.offer.membersOnly ? ' para membro' : ''} até {p.offer.until.split('-').reverse().slice(0, 2).join('/')}</p>
+              <p className={`${big ? 'text-xl' : 'text-lg'} -mt-0.5 font-bold leading-tight text-amber-700`}>
+                {formatMoney(Math.min(p.offer.price, p.offer.membersOnly ? p.offer.price : p.memberPrice))}
+                <span className="text-xs font-medium">{unitLabel(p)}</span>
+              </p>
+            </>
+          ) : off > 0 ? (
             <>
               <p className="text-xs text-ink-soft">
                 Normal <span className="line-through">{formatMoney(p.price)}</span>
@@ -121,7 +144,7 @@ export function Catalog({ data, big, header, onAdd }: { data: ShopCatalog; big?:
             Tudo
           </button>
           <button className={chip(onlyOffers)} onClick={() => setOnlyOffers((v) => !v)}>
-            Ofertas de membro
+            Ofertas
           </button>
           {data.categories.map((c) => (
             <button key={c.id} className={chip(cat === c.id)} onClick={() => setCat(cat === c.id ? null : c.id)}>

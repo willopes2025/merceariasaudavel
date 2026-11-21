@@ -64,10 +64,11 @@ export const NAV: NavGroup[] = [
     items: [
       { label: 'Clientes e membros', path: '/clientes', phase: 0, permission: 'customer.view' },
       { label: 'WhatsApp com IA', path: '/whatsapp', phase: 2, description: 'Inbox da equipe, catálogo na conversa e agente de IA que tira dúvida e monta o carrinho.' },
-      { label: 'Recompra automática', path: '/recompra', phase: 3, description: 'Avisa a cliente antes do whey acabar, com o mesmo pedido pronto para repetir.' },
+      { label: 'Recompra e relacionamento', path: '/recompra', phase: 0, permission: 'customer.view' },
+      { label: 'Campanhas e cupons', path: '/campanhas', phase: 0, permission: 'campaign.manage' },
       { label: 'Parceiros (nutris e personais)', path: '/parceiros', phase: 3, description: 'Cupom de cada parceiro, comissão automática e prescrição com um clique.' },
       { label: 'Montador de kit', path: '/montador', phase: 3, description: 'A cliente diz o objetivo e a IA monta a cesta com o que tem em estoque.' },
-      { label: 'Campanhas', path: '/campanhas', phase: 3, description: 'Disparos segmentados e rastreio de vendas vindas do Meta Ads e do Google Ads.' },
+      { label: 'Disparos e anúncios', path: '/disparos', phase: 3, description: 'Disparo segmentado pelo WhatsApp e rastreio de vendas vindas do Meta Ads e do Google Ads.' },
     ],
   },
   {

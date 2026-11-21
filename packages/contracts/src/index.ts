@@ -33,6 +33,7 @@ export const PERMISSIONS = {
   reportView: 'report.view',
   goalManage: 'goal.manage',
   orderPrepare: 'order.prepare',
+  campaignManage: 'campaign.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -61,6 +62,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'report.view': 'Ver painéis e relatórios',
   'goal.manage': 'Definir metas e telas de TV',
   'order.prepare': 'Tela de preparo: andar com os pedidos',
+  'campaign.manage': 'Criar campanhas, cupons e ofertas',
 };
 
 /**
@@ -235,3 +237,5 @@ export interface Features {
 }
 export * from './shop';
 export * from './orders';
+export * from './campaigns';
+export * from './growth';

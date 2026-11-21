@@ -344,6 +344,7 @@ export class ProductsService {
       description: input.description,
       imageUrl: input.imageUrl,
       showInApp: input.showInApp,
+      repurchaseDays: input.repurchaseDays,
       active: input.active,
       // Sem o campo na requisição, o que está gravado fica.
       ...(input.ncm !== undefined ? { ncm: input.ncm } : {}),
@@ -400,6 +401,7 @@ export function toProduct(r: Row, stores: Map<string, string>): Product {
     description: r.description,
     imageUrl: r.imageUrl,
     showInApp: r.showInApp,
+    repurchaseDays: r.repurchaseDays,
     active: r.active,
     stock,
     totalStock: q3(stock.reduce((s, b) => s + b.quantity, 0)),

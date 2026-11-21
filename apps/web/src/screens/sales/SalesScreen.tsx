@@ -146,7 +146,9 @@ export function SaleScreen() {
         <dl className="ml-auto mt-3 max-w-xs space-y-1 text-sm">
           <Line label="Produtos" value={formatMoney(s.grossTotal)} />
           {s.memberSavings > 0 && <Line label="Preço de membro" value={`− ${formatMoney(s.memberSavings)}`} />}
-          {s.discount > 0 && <Line label="Desconto" value={`− ${formatMoney(s.discount)}`} />}
+          {s.promoSavings > 0 && <Line label="Ofertas" value={`− ${formatMoney(s.promoSavings)}`} />}
+          {s.discount - s.couponDiscount > 0.004 && <Line label="Desconto" value={`− ${formatMoney(s.discount - s.couponDiscount)}`} />}
+          {s.couponDiscount > 0 && <Line label={`Cupom ${s.couponCode ?? ''}`} value={`− ${formatMoney(s.couponDiscount)}`} />}
           {s.cashbackUsed > 0 && <Line label="Cashback usado" value={`− ${formatMoney(s.cashbackUsed)}`} />}
           <Line label="Total pago" value={formatMoney(s.total)} bold />
           {s.change > 0 && <Line label="Troco" value={formatMoney(s.change)} />}
