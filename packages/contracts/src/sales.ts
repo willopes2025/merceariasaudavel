@@ -130,6 +130,8 @@ export interface SaleQuote {
   campaignCashback: number;
   /** Taxa de entrega cobrada (soma no total; fica fora da NFC-e). */
   deliveryFee: number;
+  /** Parceiro da venda (código digitado ou cliente indicada): desconto e comissão. */
+  partner: { id: string; name: string; code: string; discount: number; commission: number; viaCode: boolean } | null;
   /** Cliente faz aniversário este mês e tem cupom de aniversário para usar. */
   birthdayCoupon: { code: string; name: string; summary: string } | null;
 }
@@ -166,6 +168,9 @@ export interface Sale {
   promoSavings: number;
   campaignCashback: number;
   deliveryFee: number;
+  partnerName: string | null;
+  partnerDiscount: number;
+  partnerCommission: number;
   total: number;
   /** Troco devolvido em dinheiro. */
   change: number;

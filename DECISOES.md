@@ -72,6 +72,15 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Entrega só fecha depois do despacho (`saiu_entrega`); não aparece na TV de retirada.
 - Entregador abre pelo link com token (32 hex); "link novo" troca o token. Ele só vê e fecha as entregas dele.
 
+## Parceiros e kits (Fase 3c)
+- Código do parceiro e código de cupom não podem coincidir (um digitado no caixa vale um só).
+- Desconto do parceiro: para a cliente ligada a ele ou para quem digita o código. Não acumula com cupom de campanha; a comissão continua.
+- Comissão = % sobre o pago em produtos (total − taxa de entrega), arredondada para baixo no centavo, gravada na venda (`partner_commission`).
+- Código digitado liga a cliente ao parceiro só se ela ainda não tiver parceiro. Venda sem cliente com código gera comissão, mas não liga ninguém.
+- Fechamento do mês (horário de Brasília) só para mês encerrado. Grava `partner_payout` (não se altera) e cria a conta a pagar. Depois de fechado, a lista mostra os números do fechamento.
+- Portal do parceiro por link com token, sem login. Mostra só o primeiro nome das clientes. "Link novo" derruba o antigo.
+- Kit só com produtos vendáveis (sem insumo). No app aparece só se todos os produtos estiverem no catálogo. O botão do carrinho some quando algum item exige escolher adicionais.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

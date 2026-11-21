@@ -50,6 +50,9 @@ const SuppliersScreen = screen(() => import('./screens/purchasing/PurchasingScre
 const PurchaseOrdersScreen = screen(() => import('./screens/purchasing/PurchasingScreens'), (m) => m.PurchaseOrdersScreen);
 const DeliveriesScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliveriesScreen);
 const DeliverySettingsScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliverySettingsScreen);
+const PartnersScreen = screen(() => import('./screens/partners/PartnersScreens'), (m) => m.PartnersScreen);
+const KitsScreen = screen(() => import('./screens/partners/PartnersScreens'), (m) => m.KitsScreen);
+const PartnerPage = screen(() => import('./shop/PartnerPage'), (m) => m.PartnerPage);
 const CourierPage = screen(() => import('./shop/CourierPage'), (m) => m.CourierPage);
 const AppLinksScreen = screen(() => import('./screens/shop/AppLinksScreen'), (m) => m.AppLinksScreen);
 const PdvScreen = screen(() => import('./screens/pdv/PdvScreen'), (m) => m.PdvScreen);
@@ -105,6 +108,14 @@ export function App() {
       </Suspense>
     );
   }
+  const partner = path.match(/^\/parceiro\/([a-f0-9]{32})\/?$/);
+  if (partner) {
+    return (
+      <Suspense fallback={null}>
+        <PartnerPage token={partner[1]!} />
+      </Suspense>
+    );
+  }
   const courier = path.match(/^\/entregador\/([a-f0-9]{32})\/?$/);
   if (courier) {
     return (
@@ -146,6 +157,8 @@ export function App() {
             <Route path="preparo" element={<KitchenBoard />} />
             <Route path="recompra" element={<GrowthScreen />} />
             <Route path="campanhas" element={<CampaignsScreen />} />
+            <Route path="parceiros" element={<PartnersScreen />} />
+            <Route path="kits" element={<KitsScreen />} />
             <Route path="inteligencia-estoque" element={<StockIntelScreen />} />
             <Route path="compras" element={<PurchaseOrdersScreen />} />
             <Route path="fornecedores" element={<SuppliersScreen />} />

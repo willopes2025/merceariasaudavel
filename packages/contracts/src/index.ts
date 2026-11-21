@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   orderPrepare: 'order.prepare',
   campaignManage: 'campaign.manage',
   purchaseManage: 'purchase.manage',
+  partnerManage: 'partner.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -65,6 +66,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'order.prepare': 'Tela de preparo: andar com os pedidos',
   'campaign.manage': 'Criar campanhas, cupons e ofertas',
   'purchase.manage': 'Fornecedores e pedidos de compra',
+  'partner.manage': 'Parceiros, comissões e kits',
 };
 
 /**
@@ -243,3 +245,4 @@ export * from './campaigns';
 export * from './growth';
 export * from './purchasing';
 export * from './delivery';
+export * from './partners';

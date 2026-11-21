@@ -47,6 +47,11 @@ export class ShopController {
     return this.shop.catalog(slug);
   }
 
+  @Get('kits')
+  kits(@Param('slug') slug: string) {
+    return this.shop.kits(slug);
+  }
+
   @Post('signup')
   signup(@Param('slug') slug: string, @Body(new ZodValidationPipe(shopSignupSchema)) body: ShopSignupInput, @Req() req: Request) {
     return this.shop.signup(slug, body, req.ip ?? 'desconhecido');

@@ -5,3 +5,4 @@ apps/api/public/
 .env.production
 backups/
 *.log
+.e2e.local

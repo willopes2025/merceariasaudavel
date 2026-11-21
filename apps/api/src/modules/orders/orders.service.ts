@@ -234,7 +234,7 @@ export class OrdersService {
         paymentNote: `${PAY_ON_DELIVERY[pay]} na entrega${change}`,
       };
     }
-    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery);
+    return this.place(place.tenantId, storeId, 'app', customer.id, customer.name.split(' ')[0]!, input.items, input.notes, delivery, input.couponCode);
   }
 
   async createFromTotem(place: ShopPlace, input: TotemOrderInput): Promise<Order> {
@@ -296,14 +296,16 @@ export class OrdersService {
 
   // ---------------------------------------------------------------- apoio
 
-  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null): Promise<Order> {
+  private async place(tenantId: string, storeId: string, channel: OrderChannel, customerId: string | null, callName: string, items: SaleLineInput[], notes: string | null, delivery: DeliveryPlan | null = null, couponCode: string | null = null): Promise<Order> {
     // Mesma conta do caixa (preço de membro, montagem, regras): erro aqui = erro no caixa.
-    let quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode: null, deliveryFee: 0 });
+    let quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode, deliveryFee: 0 });
+    // Cupom que não vale avisa já no app (o caixa conferiria de novo).
+    if (couponCode && quote.couponError) throw new DomainError('COUPON_INVALID', quote.couponError);
     let fee = 0;
     if (delivery) {
       if (quote.total < delivery.zone.minOrder) throw new DomainError('DELIVERY_MIN_ORDER', `Para entregar em ${delivery.zone.name} o pedido mínimo é R$ ${delivery.zone.minOrder.toFixed(2).replace('.', ',')}.`);
       fee = zoneFee(delivery.zone, quote.total);
-      if (fee > 0) quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode: null, deliveryFee: fee });
+      if (fee > 0) quote = await this.sales.estimate(tenantId, { storeId, customerId: customerId ?? undefined, items, discount: 0, useCashback: 0, couponCode, deliveryFee: fee });
     }
     const kinds = await this.prisma.product.findMany({ where: { tenantId, id: { in: items.map((i) => i.productId) } }, select: { id: true, kind: true, unit: true, showInApp: true } });
     const hidden = kinds.find((k) => !k.showInApp || k.kind === 'insumo');
@@ -322,6 +324,7 @@ export class OrdersService {
           items: lines as unknown as Prisma.InputJsonValue,
           estimate: quote.total,
           notes,
+          couponCode: couponCode && !quote.couponError ? couponCode : null,
           ...(delivery
             ? { fulfillment: 'entrega', address: delivery.address as unknown as Prisma.InputJsonValue, zoneId: delivery.zoneId, deliveryFee: fee, paymentNote: delivery.paymentNote }
             : {}),
@@ -374,6 +377,7 @@ export function toOrder(r: Row): Order {
     zoneName: r.zone?.name ?? null,
     deliveryFee: Number(r.deliveryFee),
     paymentNote: r.paymentNote,
+    couponCode: r.couponCode,
     courier: r.courier ? { id: r.courier.id, name: r.courier.name } : null,
     dispatchedAt: r.dispatchedAt?.toISOString() ?? null,
     saleId: r.saleId,

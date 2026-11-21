@@ -56,6 +56,14 @@ export const shopSignupSchema = z.object({
     .nullish()
     .transform((v) => v || null)
     .refine((v) => v === null || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '1900-01-01' && Date.parse(v) <= Date.now()), 'Data de nascimento inválida'),
+  /** Código do parceiro que indicou (link de indicação). */
+  partnerCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(20)
+    .nullish()
+    .transform((v) => v || null),
   acceptTerms: z.literal(true, { errorMap: () => ({ message: 'Aceite as regras do clube para continuar' }) }),
 });
 export type ShopSignupInput = z.infer<typeof shopSignupSchema>;
@@ -161,6 +169,8 @@ export interface ShopMe {
   allowWhatsapp: boolean;
   birthDate: string | null;
   memberCode: string;
+  /** Parceiro que indicou (nutri/personal). */
+  partner: { name: string; code: string; discountPct: number | null } | null;
   memberSince: string | null;
   cashbackBalance: number;
   /** Cashback que vence nos próximos 30 dias. */

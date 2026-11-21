@@ -63,6 +63,7 @@ const saleInclude = {
   payments: { orderBy: { createdAt: 'asc' }, include: { method: { select: { name: true, kind: true } }, reversal: { select: { id: true } } } },
   order: { select: { id: true, number: true, status: true } },
   coupon: { select: { code: true } },
+  partner: { select: { name: true } },
 } satisfies Prisma.SaleInclude;
 type SaleFull = Prisma.SaleGetPayload<{ include: typeof saleInclude }>;
 
@@ -136,8 +137,11 @@ export class SalesService {
             memberPricing: quote.member,
             grossTotal: quote.grossTotal,
             memberSavings: quote.memberSavings,
-            // Desconto total = manual + cupom (a nota rateia tudo nos itens).
-            discount: Math.round((quote.discount + (quote.coupon?.discount ?? 0)) * 100) / 100,
+            // Desconto total = manual + cupom + parceiro (a nota rateia tudo nos itens).
+            discount: Math.round((quote.discount + (quote.coupon?.discount ?? 0) + (quote.partner?.discount ?? 0)) * 100) / 100,
+            partnerId: quote.partner?.id ?? null,
+            partnerDiscount: quote.partner?.discount ?? 0,
+            partnerCommission: quote.partner?.commission ?? 0,
             couponId: quote.coupon?.id ?? null,
             couponDiscount: quote.coupon?.discount ?? 0,
             promoSavings: quote.promoSavings,
@@ -188,6 +192,11 @@ export class SalesService {
             if (!x.trackStock) continue;
             await takeStock(tx, { ...base, productId: x.ingredientId, type: 'consumo', unitCost: x.cost }, q3(x.quantity * l.quantity), { trackLots: x.trackLots });
           }
+        }
+
+        // Código do parceiro no caixa: a cliente que ainda não tem parceiro fica ligada a ele.
+        if (quote.partner?.viaCode && quote.customer) {
+          await tx.customer.updateMany({ where: { id: quote.customer.id, tenantId: ctx.tenantId, partnerId: null }, data: { partnerId: quote.partner.id, partnerSince: new Date() } });
         }
 
         // Tela de preparo: pedido cobrado entra na fila; balcão com shake/sorvete abre pedido já pago.
@@ -461,14 +470,19 @@ export class SalesService {
     // Cupom: confere e desconta depois do desconto manual.
     let coupon: SaleQuote['coupon'] = null;
     let couponError: string | null = null;
-    if (input.couponCode) {
+    // Código digitado pode ser de parceiro (nutri/personal) em vez de cupom.
+    const typedPartner = input.couponCode ? await db.partner.findFirst({ where: { tenantId, code: input.couponCode.toUpperCase(), active: true } }) : null;
+    const partnerRow = typedPartner ?? (customer?.partnerId ? await db.partner.findFirst({ where: { id: customer.partnerId, tenantId, active: true } }) : null);
+    if (input.couponCode && !typedPartner) {
       const check = await checkCoupon(db as Tx, tenantId, input.couponCode, customer, subtotalCents / 100, opts.lockCoupon);
       if (check.campaign) {
         const off = couponCents(check.campaign, afterDiscount);
         coupon = { id: check.campaign.id, code: check.campaign.code!, name: check.campaign.name, discount: off / 100 };
       } else couponError = check.error;
     }
-    const afterCoupon = afterDiscount - cents(coupon?.discount ?? 0);
+    // Desconto do parceiro (quando não há cupom de campanha na mesma compra).
+    const partnerOff = partnerRow?.customerDiscountPct && !coupon ? Math.floor((afterDiscount * Number(partnerRow.customerDiscountPct)) / 100) : 0;
+    const afterCoupon = afterDiscount - cents(coupon?.discount ?? 0) - partnerOff;
     const balance = cents(customer?.cashbackBalance);
     const cashbackAvailable = customer ? Math.min(balance, Math.floor((afterCoupon * rules.cashbackMaxUsePct) / 100)) : 0;
     const cashbackUsed = Math.min(cents(input.useCashback), cashbackAvailable);
@@ -487,6 +501,9 @@ export class SalesService {
       campaignCashback = Math.floor(((weighted / 100) * goodsPaid) / subtotalCents);
     }
     const birthdayCoupon = !coupon ? await birthdaySuggestion(db as Tx, tenantId, customer) : null;
+    const partner: SaleQuote['partner'] = partnerRow
+      ? { id: partnerRow.id, name: partnerRow.name, code: partnerRow.code, discount: partnerOff / 100, commission: Math.floor((goodsPaid * Number(partnerRow.commissionPct)) / 100) / 100, viaCode: Boolean(typedPartner) }
+      : null;
     const wouldSave = member
       ? 0
       : input.items.reduce((s, i) => {
@@ -508,6 +525,7 @@ export class SalesService {
         total: total / 100,
         cashbackEarned: member ? (earned(goodsPaid, rules) + campaignCashback) / 100 : 0,
         deliveryFee: fee / 100,
+        partner,
         wouldSaveAsMember: wouldSave / 100,
         promoSavings: lines.reduce((sum, l) => sum + cents(l.promoSavings), 0) / 100,
         coupon,
@@ -569,6 +587,9 @@ function toSale(s: SaleFull, doc: { id: string; status: string; number: string |
     promoSavings: Number(s.promoSavings),
     campaignCashback: Number(s.campaignCashback),
     deliveryFee: Number(s.deliveryFee),
+    partnerName: s.partner?.name ?? null,
+    partnerDiscount: Number(s.partnerDiscount),
+    partnerCommission: Number(s.partnerCommission),
     total: Number(s.total),
     change: changeNote ? Number(changeNote.replace(',', '.')) : paid > cents(s.total) ? (paid - cents(s.total)) / 100 : 0,
     payments: s.payments.map((p) => ({ id: p.id, methodName: p.method?.name ?? '—', kind: (p.method?.kind as PaymentKind | undefined) ?? null, amount: Number(p.amount), reversed: Boolean(p.reversal) })),

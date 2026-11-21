@@ -120,6 +120,7 @@ export function PdvScreen() {
   async function charge(o: Order) {
     reset();
     setOrder(o);
+    if (o.couponCode) setCoupon(o.couponCode);
     setShowOrders(false);
     setLines(
       o.items.map((i) => ({
@@ -310,6 +311,12 @@ export function PdvScreen() {
               </label>
               {q?.couponError && coupon && <p className="text-xs text-red-600">{q.couponError}</p>}
               {q?.coupon && <Row label={`Cupom ${q.coupon.code}`} value={`− ${formatMoney(q.coupon.discount)}`} className="text-brand" />}
+              {q?.partner && q.partner.discount > 0 && <Row label={`Parceiro ${q.partner.name}`} value={`− ${formatMoney(q.partner.discount)}`} className="text-brand" />}
+              {q?.partner && (
+                <p className="text-xs text-ink-soft">
+                  {q.partner.viaCode ? 'Código do parceiro' : 'Cliente indicada por'} {q.partner.name} · comissão {formatMoney(q.partner.commission)}
+                </p>
+              )}
               {can('sale.discount') && (
                 <label className="flex items-center justify-between gap-3">
                   <span className="text-ink-soft">Desconto (R$)</span>

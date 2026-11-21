@@ -150,6 +150,8 @@ export function SaleScreen() {
           {s.deliveryFee > 0 && <Line label="Entrega (fora da nota)" value={`+ ${formatMoney(s.deliveryFee)}`} />}
           {s.discount - s.couponDiscount > 0.004 && <Line label="Desconto" value={`− ${formatMoney(s.discount - s.couponDiscount)}`} />}
           {s.couponDiscount > 0 && <Line label={`Cupom ${s.couponCode ?? ''}`} value={`− ${formatMoney(s.couponDiscount)}`} />}
+          {s.partnerDiscount > 0 && <Line label={`Desconto do parceiro ${s.partnerName ?? ''}`} value={`− ${formatMoney(s.partnerDiscount)}`} />}
+          {s.partnerName && <Line label={`Comissão de ${s.partnerName}`} value={formatMoney(s.partnerCommission)} />}
           {s.cashbackUsed > 0 && <Line label="Cashback usado" value={`− ${formatMoney(s.cashbackUsed)}`} />}
           <Line label="Total pago" value={formatMoney(s.total)} bold />
           {s.change > 0 && <Line label="Troco" value={formatMoney(s.change)} />}

@@ -71,7 +71,7 @@ cp apps/api/.env.example apps/api/.env      # ajuste DATABASE_URL
 npm run db:deploy && npm run db:seed        # com SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD
 npm run dev                                  # API em :3000, sistema em :5180
 npm test                                     # testes unitários
-npm run e2e                                  # ponta a ponta contra um Postgres local
+npm run e2e                                  # ponta a ponta contra um Postgres local (API com SHOP_SIGNUPS_PER_HOUR=100)
 ```
 
 Sem acesso ao servidor de binários do Prisma, use `PRISMA_JS_ENGINE=1`.
@@ -125,3 +125,25 @@ Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
 - **Página do entregador** (`/entregador/<link>`), sem login: endereço com rota no
   Google Maps, ligar/WhatsApp, valor a cobrar e o botão "Entregue". "Link novo"
   derruba o antigo.
+
+## Fase 3c — parceiros e kits
+
+- **Parceiros (Crescer):** nutricionista, personal ou influenciador com código próprio
+  (ex.: `NUTRIANA`), desconto para a cliente e comissão para o parceiro.
+- A cliente fica **ligada ao parceiro** de dois jeitos:
+  - cadastro no app pelo link de indicação (`/app?ref=CODIGO`);
+  - código digitado no caixa ou no app.
+- Cliente ligada ganha o desconto do parceiro em toda compra. Não acumula com cupom
+  de campanha.
+- A **comissão** é calculada sobre o que foi pago em produtos (sem taxa de entrega e
+  sem cashback usado). Ela fica gravada na venda.
+- **Portal do parceiro** (`/parceiro/<link>`), sem login:
+  - código e botão para compartilhar no WhatsApp;
+  - clientes indicadas (só o primeiro nome);
+  - compras e comissão mês a mês;
+  - kits do parceiro.
+- **Fechar mês:** com o mês encerrado, lança a comissão em Contas a pagar
+  ("Salários e comissões"). Cada mês fecha uma vez só.
+- **Kits (Crescer):** cestas por objetivo ou receitadas por um parceiro. No app
+  aparecem em "Kits prontos", com o botão "Pôr tudo no carrinho". O link do kit
+  (`/app?ref=CODIGO&kit=…`) abre o app com o kit em destaque.

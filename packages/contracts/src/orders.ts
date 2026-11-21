@@ -46,6 +46,14 @@ export const shopOrderSchema = z
     items,
     notes,
     fulfillment: z.enum(['retirada', 'entrega']).default('retirada'),
+    /** Cupom ou código de parceiro (o caixa aplica ao cobrar). */
+    couponCode: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .max(20)
+      .nullish()
+      .transform((v) => v || null),
     addressId: z.string().uuid().nullish(),
     payOnDelivery: z.enum(['pix', 'cartao', 'dinheiro']).nullish(),
     /** Dinheiro: troco para quanto. */
@@ -116,6 +124,7 @@ export interface Order {
   zoneName: string | null;
   deliveryFee: number;
   paymentNote: string | null;
+  couponCode: string | null;
   courier: { id: string; name: string } | null;
   dispatchedAt: string | null;
   saleId: string | null;

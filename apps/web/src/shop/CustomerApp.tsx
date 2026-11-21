@@ -16,6 +16,7 @@ import {
   type ShopProduct,
   type ShopPurchase,
   type ShopRepurchase,
+  type ShopKit,
   type CustomerAddress,
   type PayOnDelivery,
   PAY_ON_DELIVERY,
@@ -40,6 +41,16 @@ const client = new QueryClient({
  * no caixa. Instalável no celular (PWA); a versão das lojas (Play Store /
  * App Store) embrulha esta mesma página.
  */
+const REF_KEY = 'mercearia.indicacao';
+const KIT_KEY = 'mercearia.kit';
+const stored = (key: string) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
 export function CustomerApp() {
   const [token, setToken] = useState(() => customerSession.token());
   whenCustomerSessionExpires(() => {
@@ -47,6 +58,15 @@ export function CustomerApp() {
     setToken(null);
   });
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    try {
+      const ref = params.get('ref');
+      if (ref && /^[A-Za-z0-9-]{3,20}$/.test(ref)) localStorage.setItem(REF_KEY, ref.toUpperCase());
+      const kit = params.get('kit');
+      if (kit && /^[0-9a-f-]{36}$/.test(kit)) localStorage.setItem(KIT_KEY, kit);
+    } catch {
+      /* sem armazenamento */
+    }
     document.title = 'Mercearia Saudável — Clube';
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app-sw.js', { scope: '/app' }).catch(() => undefined);
   }, []);
@@ -142,7 +162,7 @@ function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; cl
     mutationFn: () =>
       shopApi<ShopLoginResult>('/signup', {
         method: 'POST',
-        json: { name: f.name, phone: f.phone, document: f.document || null, birthDate: f.birthDate || null, pin: f.pin, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp, acceptTerms: f.acceptTerms },
+        json: { name: f.name, phone: f.phone, document: f.document || null, birthDate: f.birthDate || null, pin: f.pin, goal: f.goal || null, allowWhatsapp: f.allowWhatsapp, acceptTerms: f.acceptTerms, partnerCode: stored(REF_KEY) },
       }),
     onSuccess: onDone,
   });
@@ -154,8 +174,10 @@ function SignupForm({ onDone, club }: { onDone: (r: ShopLoginResult) => void; cl
     m.mutate();
   };
   const needsCpf = m.error instanceof ApiError && m.error.code === 'CONFIRM_AT_STORE';
+  const ref = stored(REF_KEY);
   return (
     <form onSubmit={submit} className="space-y-4">
+      {ref && <p className="rounded-xl bg-brand-soft px-4 py-2 text-sm text-brand-dark">Cadastro com o código de indicação <b>{ref}</b>.</p>}
       <Input label="Seu nome" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoComplete="name" required />
       <Input label="Celular com DDD" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} inputMode="tel" autoComplete="tel" placeholder="(27) 99999-9999" required />
       <Input
@@ -260,7 +282,7 @@ function Shell({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; 
         </header>
         <main className="px-4">
           <Routes>
-            <Route path="/app" element={<Home me={me} onAdd={onAdd} />} />
+            <Route path="/app" element={<Home me={me} onAdd={onAdd} onAddKit={ordering ? (k) => k.items.forEach((i) => cart.add(i.product, i.quantity)) : undefined} />} />
             <Route path="/app/produtos" element={<Products onAdd={onAdd} />} />
             <Route path="/app/extrato" element={<Statement />} />
             <Route path="/app/conta" element={<Account me={me} onSignOut={onSignOut} onToken={onToken} />} />
@@ -344,6 +366,9 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
   const [pay, setPay] = useState<PayOnDelivery>('pix');
   const [changeFor, setChangeFor] = useState('');
   const [adding, setAdding] = useState(false);
+  const [coupon, setCoupon] = useState('');
+  const me = useMe();
+  const partner = me.data?.partner ?? null;
   const addresses = useQuery({ queryKey: ['shop', 'addresses'], queryFn: () => shopApi<CustomerAddress[]>('/me/addresses'), enabled: mode === 'entrega' });
   useEffect(() => {
     if (mode === 'entrega' && !addressId && addresses.data?.length) setAddressId(addresses.data[0]!.id);
@@ -357,7 +382,7 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
     mutationFn: () =>
       shopApi<Order>('/me/orders', {
         method: 'POST',
-        json: { items: cart.items, notes: notes || null, fulfillment: mode, ...(mode === 'entrega' ? { addressId, payOnDelivery: pay, changeFor: pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
+        json: { items: cart.items, notes: notes || null, couponCode: coupon.trim() ? coupon.trim().toUpperCase() : null, fulfillment: mode, ...(mode === 'entrega' ? { addressId, payOnDelivery: pay, changeFor: pay === 'dinheiro' && changeFor ? changeFor : null } : {}) },
       }),
     onSuccess: (o) => {
       cart.clear();
@@ -424,6 +449,17 @@ function CartSheet({ cart, onClose }: { cart: Cart; onClose: () => void }) {
             </div>
           </div>
         )}
+        <label className="mt-3 block">
+          <span className="text-sm font-medium text-ink">Cupom ou código de parceiro (opcional)</span>
+          <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} maxLength={20} placeholder="Ex.: NUTRIANA" className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-mono uppercase outline-none focus:border-brand" />
+        </label>
+        {partner?.discountPct && !coupon.trim() ? (
+          <p className="mt-1 text-xs text-brand-dark">
+            Indicação de {partner.name}: {String(partner.discountPct).replace('.', ',')}% de desconto, aplicado no pagamento.
+          </p>
+        ) : coupon.trim() ? (
+          <p className="mt-1 text-xs text-ink-soft">O desconto do cupom entra no pagamento.</p>
+        ) : null}
         <label className="mt-2 block">
           <span className="text-sm font-medium text-ink">Observação (opcional)</span>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={200} placeholder="Ex.: sem gelo, bem batido" className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-brand" />
@@ -597,6 +633,7 @@ function MemberCard({ me }: { me: ShopMe }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-accent">Cartão de membro</p>
           <p className="mt-1 text-lg font-bold leading-tight">{me.name}</p>
           {me.memberSince && <p className="text-xs text-white/70">Membro desde {new Date(me.memberSince).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>}
+          {me.partner && <p className="text-xs text-white/70">Indicada por {me.partner.name}</p>}
         </div>
         <Leaf className="h-8 w-8" />
       </div>
@@ -614,7 +651,7 @@ function MemberCard({ me }: { me: ShopMe }) {
   );
 }
 
-function Home({ me, onAdd }: { me: ShopMe; onAdd?: (p: ShopProduct) => void }) {
+function Home({ me, onAdd, onAddKit }: { me: ShopMe; onAdd?: (p: ShopProduct) => void; onAddKit?: (k: ShopKit) => void }) {
   const catalog = useCatalog();
   const offers = (catalog.data?.products ?? [])
     .filter((p) => p.available && saving(p) > 0)
@@ -627,6 +664,7 @@ function Home({ me, onAdd }: { me: ShopMe; onAdd?: (p: ShopProduct) => void }) {
       <InstallHint />
       <CampaignBanner />
       <Repurchase onAdd={onAdd} />
+      <Kits goal={me.goal ?? null} onAddKit={onAddKit} />
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-white p-4 shadow-sm">
           <p className="text-xs font-medium text-ink-soft">Seu cashback</p>
@@ -1065,6 +1103,57 @@ function Addresses() {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ kits
+
+function Kits({ goal, onAddKit }: { goal: CustomerGoal | null; onAddKit?: (k: ShopKit) => void }) {
+  const kits = useQuery({ queryKey: ['shop', 'kits'], queryFn: () => shopApi<ShopKit[]>('/kits'), staleTime: 5 * 60_000 });
+  const [added, setAdded] = useState<string | null>(null);
+  const wanted = stored(KIT_KEY);
+  const list = [...(kits.data ?? [])].sort((a, b) => Number(b.id === wanted) - Number(a.id === wanted) || Number(b.goal === goal) - Number(a.goal === goal));
+  if (!list.length) return null;
+  const blocked = (k: ShopKit) => k.items.some((i) => !i.product.available || i.product.optionGroups.some((g) => g.minSelect > 0));
+  return (
+    <section>
+      <h2 className="mb-2 font-bold text-ink">Kits prontos</h2>
+      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1">
+        {list.map((k) => (
+          <article key={k.id} className={`w-64 shrink-0 snap-start rounded-2xl bg-white p-4 shadow-sm ${k.id === wanted ? 'ring-2 ring-brand' : ''}`}>
+            <p className="font-semibold text-ink">{k.name}</p>
+            <p className="text-xs text-ink-soft">
+              {k.goal ? CUSTOMER_GOALS[k.goal] : ''}
+              {k.partnerName ? `${k.goal ? ' · ' : ''}indicado por ${k.partnerName}` : ''}
+            </p>
+            {k.description && <p className="mt-1 text-sm text-ink-soft">{k.description}</p>}
+            <ul className="mt-2 space-y-0.5 text-sm">
+              {k.items.map((i) => (
+                <li key={i.product.id}>
+                  {String(i.quantity).replace('.', ',')}× {i.product.name}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              {k.memberTotal < k.total && <span className="mr-2 text-sm text-ink-soft line-through">{formatMoney(k.total)}</span>}
+              <span className="text-lg font-bold text-brand">{formatMoney(k.memberTotal)}</span>
+            </p>
+            {onAddKit && !blocked(k) && (
+              <button
+                className="mt-2 w-full rounded-xl bg-brand py-2 text-sm font-semibold text-white"
+                onClick={() => {
+                  onAddKit(k);
+                  setAdded(k.id);
+                  setTimeout(() => setAdded(null), 2000);
+                }}
+              >
+                {added === k.id ? 'No carrinho ✓' : 'Pôr tudo no carrinho'}
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
     </section>
   );
 }

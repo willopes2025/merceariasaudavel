@@ -18,6 +18,7 @@ import {
   type ShopProfileInput,
   type ShopPurchase,
   type ShopRepurchase,
+  type ShopKit,
   type AddressInput,
   type CustomerAddress,
   type ShopSignupInput,
@@ -68,7 +69,8 @@ const money = (v: number) => Math.round(v * 100) / 100;
 export class ShopService {
   private readonly throttle = new LoginThrottle(LOCK_AFTER, LOCK_MINUTES * 60_000, LOCK_MINUTES * 60_000);
   /** Muitas contas novas do mesmo aparelho/rede em pouco tempo: freia. */
-  private readonly signupThrottle = new LoginThrottle(8, 60 * 60_000, 60 * 60_000);
+  /** Cadastros por IP por hora (SHOP_SIGNUPS_PER_HOUR; padrão 8). */
+  private readonly signupThrottle = new LoginThrottle(Number(process.env.SHOP_SIGNUPS_PER_HOUR) || 8, 60 * 60_000, 60 * 60_000);
   private readonly tenants = new Map<string, { at: number; value: ShopTenant }>();
 
   constructor(
@@ -210,6 +212,7 @@ export class ShopService {
       joined = true;
     }
 
+    const partner = input.partnerCode ? await this.prisma.partner.findFirst({ where: { tenantId: t.tenantId, code: input.partnerCode, active: true }, select: { id: true } }) : null;
     const pinHash = await argon2.hash(input.pin);
     const result = await this.prisma.$transaction(async (tx) => {
       if (existing) {
@@ -222,6 +225,7 @@ export class ShopService {
             goal: input.goal ?? existing.goal,
             allowWhatsapp: input.allowWhatsapp,
             birthDate: existing.birthDate ?? (input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null),
+            ...(partner && !existing.partnerId ? { partnerId: partner.id, partnerSince: new Date() } : {}),
           },
         });
       } else {
@@ -234,6 +238,7 @@ export class ShopService {
             goal: input.goal,
             allowWhatsapp: input.allowWhatsapp,
             birthDate: input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null,
+            ...(partner ? { partnerId: partner.id, partnerSince: new Date() } : {}),
             isMember: true,
             memberSince: new Date(),
             memberSource: 'app',
@@ -299,7 +304,7 @@ export class ShopService {
   // ---------------------------------------------------------------- minha conta
 
   async me(s: CustomerSession): Promise<ShopMe> {
-    const c = await this.prisma.customer.findFirst({ where: { id: s.customerId, tenantId: s.tenantId } });
+    const c = await this.prisma.customer.findFirst({ where: { id: s.customerId, tenantId: s.tenantId }, include: { partner: { select: { name: true, code: true, customerDiscountPct: true, active: true } } } });
     if (!c) throw new NotFoundError('cliente');
     const memberCode = c.memberCode ?? (await ensureMemberCode(this.prisma, s.tenantId, c.id));
     const [totals, expiring] = await Promise.all([
@@ -317,6 +322,7 @@ export class ShopService {
       allowWhatsapp: c.allowWhatsapp,
       birthDate: c.birthDate?.toISOString().slice(0, 10) ?? null,
       memberCode,
+      partner: c.partner?.active ? { name: c.partner.name, code: c.partner.code, discountPct: c.partner.customerDiscountPct == null ? null : Number(c.partner.customerDiscountPct) } : null,
       memberSince: c.memberSince?.toISOString() ?? null,
       cashbackBalance: Number(c.cashbackBalance),
       expiringSoon: expiring,
@@ -393,6 +399,33 @@ export class ShopService {
       })
       .filter((r): r is ShopRepurchase => r !== null)
       .slice(0, 6);
+  }
+
+  /** Kits ativos com os produtos do catálogo (só kits com todos os produtos disponíveis no app). */
+  async kits(slug: string): Promise<ShopKit[]> {
+    const t = await this.tenant(slug);
+    const [rows, catalog] = await Promise.all([
+      this.prisma.kit.findMany({ where: { tenantId: t.tenantId, active: true }, include: { items: { orderBy: { position: 'asc' } }, partner: { select: { name: true, active: true } } }, orderBy: { name: 'asc' } }),
+      this.catalog(slug),
+    ]);
+    const out: ShopKit[] = [];
+    for (const k of rows) {
+      const items = k.items.map((i) => ({ product: catalog.products.find((p) => p.id === i.productId), quantity: Number(i.quantity) }));
+      if (items.some((i) => !i.product)) continue;
+      const list = items as Array<{ product: ShopProduct; quantity: number }>;
+      out.push({
+        id: k.id,
+        name: k.name,
+        description: k.description,
+        goal: (k.goal && k.goal in CUSTOMER_GOALS ? k.goal : null) as CustomerGoal | null,
+        partnerName: k.partner?.active ? k.partner.name : null,
+        imageUrl: k.imageUrl,
+        items: list,
+        total: money(list.reduce((s, i) => s + i.product.price * i.quantity, 0)),
+        memberTotal: money(list.reduce((s, i) => s + i.product.memberPrice * i.quantity, 0)),
+      });
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- endereços
