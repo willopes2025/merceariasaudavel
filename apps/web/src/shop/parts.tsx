@@ -1,22 +1,19 @@
+import { BrandMark } from '../brand/Brand';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import QRCode from 'qrcode';
 import { formatMoney, type ShopCatalog, type ShopProduct } from '@mercearia/contracts';
 
 /** Folha da marca (mesma do logo). */
+/** Símbolo da marca (nome antigo mantido: é usado em todas as telas da cliente). */
 export function Leaf({ className = 'h-6 w-6' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden>
-      <path d="M6 18C6 10 11 6 18 6c0 7-4 12-12 12z" fill="#B8E06A" />
-      <path d="M6 18l6-6" stroke="#2F6B3A" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
+  return <BrandMark className={className} />;
 }
 
 export function Qr({ value, size = 168, className }: { value: string; size?: number; className?: string }) {
   const [svg, setSvg] = useState('');
   useEffect(() => {
     let alive = true;
-    QRCode.toString(value, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#14232B', light: '#FFFFFF' } })
+    QRCode.toString(value, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#2B1E18', light: '#FFFFFF' } })
       .then((s) => alive && setSvg(s))
       .catch(() => alive && setSvg(''));
     return () => {
@@ -131,7 +128,7 @@ export function Catalog({ data, big, header, onAdd, linkOf }: { data: ShopCatalo
   return (
     <div>
       {header}
-      <div className="sticky top-0 z-10 -mx-4 bg-[#F6F8F4]/95 px-4 pb-2 pt-2 backdrop-blur">
+      <div className="sticky top-0 z-10 -mx-4 bg-cream/95 px-4 pb-2 pt-2 backdrop-blur">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}

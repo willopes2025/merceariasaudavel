@@ -1,3 +1,4 @@
+import { BrandMark } from '../../brand/Brand';
 import { useEffect, useState } from 'react';
 import type { TvData } from '@mercearia/contracts';
 import { formatMoney } from '../../components/format';
@@ -59,11 +60,8 @@ export function TvPage({ token }: { token: string }) {
   return (
     <Screen>
       <header className="mb-10 flex items-center justify-between text-2xl">
-        <span className="flex items-center gap-3 font-bold">
-          <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none" stroke="#B8E06A" strokeWidth="1.6">
-            <path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15z" fill="rgba(184,224,106,.2)" />
-            <path d="M5 19l8-8" />
-          </svg>
+        <span className="flex items-center gap-3 font-display font-semibold">
+          <BrandMark className="h-12 w-12" />
           {data.storeName}
         </span>
         <span className="tabular-nums opacity-80">{clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -80,7 +78,7 @@ export function TvPage({ token }: { token: string }) {
                 Meta do dia: {formatMoney(data.dayTarget!)} · {Math.round(dayPct * 100)}% {dayPct >= 1 && '🎉 batida!'}
               </p>
               <div className="h-8 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-[#B8E06A] transition-all" style={{ width: `${dayPct * 100}%` }} />
+                <div className="h-full rounded-full bg-sun transition-all" style={{ width: `${dayPct * 100}%` }} />
               </div>
               {dayPct < 1 && <p className="mt-3 text-2xl opacity-80">Faltam {formatMoney(data.dayTarget! - data.today.total)} hoje</p>}
             </div>
@@ -90,7 +88,7 @@ export function TvPage({ token }: { token: string }) {
               const v = data.byHour.find((b) => b.hour === h)?.total ?? 0;
               return (
                 <div key={h} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-                  <div className="w-full rounded-t bg-[#4F9A5C]" style={{ height: `${(v / maxHour) * 100}%` }} />
+                  <div className="w-full rounded-t bg-brand" style={{ height: `${(v / maxHour) * 100}%` }} />
                   <span className="text-lg opacity-60">{h}h</span>
                 </div>
               );
@@ -140,7 +138,7 @@ export function TvPage({ token }: { token: string }) {
       {current === 'offers' && (
         <div className="flex-1">
           <p className="mb-6 text-5xl font-bold">
-            Preço de <span className="text-[#B8E06A]">membro</span>
+            Preço de <span className="text-sun">membro</span>
           </p>
           {!data.offers.length ? (
             <p className="text-3xl opacity-60">Cadastre preços de membro nos produtos para eles aparecerem aqui.</p>
@@ -150,7 +148,7 @@ export function TvPage({ token }: { token: string }) {
                 <div key={o.name} className="rounded-3xl bg-white/5 p-6">
                   <p className="text-2xl">{o.name}</p>
                   <p className="mt-2 text-xl line-through opacity-50">{formatMoney(o.price)}</p>
-                  <p className="text-4xl font-bold text-[#B8E06A]">{formatMoney(o.memberPrice)}</p>
+                  <p className="text-4xl font-bold text-sun">{formatMoney(o.memberPrice)}</p>
                   <p className="mt-1 text-lg opacity-70">−{o.savingPct}% para membro</p>
                 </div>
               ))}
@@ -163,7 +161,7 @@ export function TvPage({ token }: { token: string }) {
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <p className="text-6xl font-bold">Entre no clube. É grátis.</p>
           <p className="mt-6 text-4xl opacity-80">Peça no caixa: só nome e celular.</p>
-          <p className="mt-4 text-3xl text-[#B8E06A]">Preço de membro + cashback em toda compra</p>
+          <p className="mt-4 text-3xl text-sun">Preço de membro + cashback em toda compra</p>
         </div>
       )}
     </Screen>
@@ -171,7 +169,7 @@ export function TvPage({ token }: { token: string }) {
 }
 
 function Screen({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-h-screen cursor-none flex-col bg-[#0f1f14] p-12 text-white">{children}</div>;
+  return <div className="flex min-h-screen cursor-none flex-col bg-ink p-12 text-white">{children}</div>;
 }
 
 function Big({ label, value }: { label: string; value: string }) {

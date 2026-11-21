@@ -45,11 +45,11 @@ function Run({ token }: { token: string }) {
   const onRoute = r.orders.filter((o) => o.status === 'saiu_entrega');
   const delivered = r.orders.filter((o) => o.status === 'entregue');
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-[#F6F8F4] px-4 pb-10">
+    <div className="mx-auto min-h-screen max-w-md bg-cream px-4 pb-10">
       <header className="flex items-center gap-2 py-4">
         <Leaf className="h-7 w-7" />
         <div>
-          <p className="font-bold text-brand-dark">{r.storeName}</p>
+          <p className="font-display font-semibold text-brand">{r.storeName}</p>
           <p className="text-xs text-ink-soft">Entregas de {r.courierName}</p>
         </div>
       </header>

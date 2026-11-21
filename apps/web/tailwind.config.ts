@@ -1,19 +1,30 @@
 import type { Config } from 'tailwindcss';
+import colors from 'tailwindcss/colors';
 
 /**
- * Paleta da Mercearia Saudável (verde-folha + verde-limão, a mesma da apresentação). Quando
- * a identidade visual sair, troca só aqui: as telas usam os nomes, não as cores.
+ * Identidade da Mercearia Saudável, tirada da logomarca:
+ * terracota (#B74733, letras e parênteses) e laranja (#E89823, o símbolo),
+ * sobre creme, com texto em marrom café. Títulos em serifa (Fraunces),
+ * texto corrido em DM Sans. As telas usam os nomes, não as cores.
  */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        brand: { DEFAULT: '#2F6B3A', dark: '#1F4A27', soft: '#E8F2E4', accent: '#B8E06A' },
-        ink: { DEFAULT: '#14232B', soft: '#5B6B73' },
+        brand: { DEFAULT: '#B74733', dark: '#8E3426', soft: '#F6E8DA', accent: '#E89823' },
+        sun: { DEFAULT: '#E89823', dark: '#B9730F', soft: '#FCEBCF' },
+        cream: { DEFAULT: '#FBF6EE', dark: '#F2E8DA' },
+        ink: { DEFAULT: '#2B1E18', soft: '#7A665B' },
+        // Cinzas quentes (pedra) no lugar dos cinzas azulados, em todas as telas.
+        slate: colors.stone,
+        gray: colors.stone,
       },
-      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-      borderRadius: { card: '12px' },
+      fontFamily: {
+        sans: ['"DM Sans Variable"', 'system-ui', 'sans-serif'],
+        display: ['"Fraunces Variable"', 'Georgia', 'serif'],
+      },
+      borderRadius: { card: '14px' },
     },
   },
 } satisfies Config;

@@ -62,10 +62,10 @@ function Pickup() {
 
   const data = board.data ?? { preparing: [], ready: [] };
   return (
-    <div className="flex min-h-screen flex-col bg-[#14232B] p-6 text-white">
+    <div className="flex min-h-screen flex-col bg-ink p-6 text-white">
       <header className="mb-6 flex items-center gap-4">
         <Leaf className="h-12 w-12" />
-        <p className="text-3xl font-bold">{info.data?.storeName ?? 'Mercearia Saudável'}</p>
+        <p className="font-display text-3xl font-semibold">{info.data?.storeName ?? 'Mercearia Saudável'}</p>
         <p className="ml-auto text-xl text-white/60">Retirada de pedidos</p>
       </header>
       <div className="grid flex-1 grid-cols-2 gap-6">
@@ -81,11 +81,11 @@ function Pickup() {
             {!data.preparing.length && <p className="text-xl text-white/40">—</p>}
           </div>
         </section>
-        <section className="rounded-3xl bg-[#2F6B3A] p-6">
-          <h2 className="mb-6 text-3xl font-bold text-[#B8E06A]">Pronto! Retire no balcão</h2>
+        <section className="rounded-3xl bg-brand p-6">
+          <h2 className="mb-6 text-3xl font-bold text-sun">Pronto! Retire no balcão</h2>
           <div className="flex flex-wrap gap-4">
             {data.ready.map((p) => (
-              <div key={p.number} className="min-w-[180px] animate-[pulse_2s_ease-in-out_3] rounded-2xl bg-white px-6 py-5 text-center text-[#14232B]">
+              <div key={p.number} className="min-w-[180px] animate-[pulse_2s_ease-in-out_3] rounded-2xl bg-white px-6 py-5 text-center text-ink">
                 <p className="text-7xl font-bold tabular-nums">{p.number}</p>
                 <p className="mt-1 text-2xl font-semibold">{p.callName}</p>
               </div>

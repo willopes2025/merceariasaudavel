@@ -99,6 +99,12 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Pixel e GA4 só carregam com o "Aceitar" dos cookies. São ids públicos (não são segredo), guardados no banco.
 - `robots.txt`: Google só na loja (`/loja`); o sistema da equipe e o app ficam de fora.
 
+## Identidade visual
+- Cores tiradas do arquivo da logo: terracota #B74733 (letras e parênteses) e laranja #E89823 (símbolo), sobre creme #FBF6EE, com texto em marrom café #2B1E18. Cinzas trocados por cinzas quentes (stone).
+- Títulos em Fraunces (serifa suave, próxima do letreiro) e texto em DM Sans. As duas vêm instaladas no próprio sistema, sem depender do Google Fonts.
+- Logo vetorizada do PNG original (`src/brand/logo-paths.ts`), separada em camadas para a animação. O símbolo inteiro é um caminho único (sem emendas).
+- Abertura do login: cerca de 2,3 s, toca uma vez por aba. Toque ou tecla pula, e quem prefere menos movimento no aparelho vê a logo pronta.
+
 ## Produtos e estoque
 - Tipos: **revenda**, **insumo** e **preparado** (shake, sorvete). Preparado não tem estoque:
   a venda baixa os insumos da ficha técnica.

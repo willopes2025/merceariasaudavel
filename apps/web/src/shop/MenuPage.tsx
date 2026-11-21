@@ -73,19 +73,19 @@ function Menu() {
   const cashback = info.data?.club.cashbackPct ?? 0;
 
   return (
-    <div className="min-h-full bg-[#F6F8F4]">
+    <div className="min-h-full bg-cream">
       <div className={`mx-auto px-4 pb-16 ${totem ? 'max-w-6xl' : 'max-w-3xl'}`}>
         <header className="flex items-center gap-3 py-5">
           <Leaf className={totem ? 'h-12 w-12' : 'h-9 w-9'} />
           <div>
-            <p className={`${totem ? 'text-3xl' : 'text-xl'} font-bold text-brand-dark`}>{info.data?.storeName ?? 'Mercearia Saudável'}</p>
+            <p className={`${totem ? 'text-4xl' : 'text-2xl'} font-display font-semibold text-brand`}>{info.data?.storeName ?? 'Mercearia Saudável'}</p>
             <p className="text-sm text-ink-soft">Cardápio e preços</p>
           </div>
         </header>
 
         <section className={`mb-4 flex items-center gap-4 rounded-3xl bg-gradient-to-br from-brand to-brand-dark text-white shadow-lg ${totem ? 'p-6' : 'p-5'}`}>
           <div className="flex-1">
-            <p className={`${totem ? 'text-3xl' : 'text-xl'} font-bold leading-tight`}>Membro paga menos.</p>
+            <p className={`${totem ? 'text-4xl' : 'text-2xl'} font-display font-semibold leading-tight`}>Membro paga menos.</p>
             <p className={`mt-1 ${totem ? 'text-lg' : 'text-sm'} text-white/85`}>
               Cadastro grátis no app em 30 segundos{best > 0 ? `: até ${formatMoney(best)} de desconto por item` : ''}
               {cashback > 0 ? ` e ${cashback.toLocaleString('pt-BR')}% de volta em cashback` : ''}.

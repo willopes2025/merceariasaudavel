@@ -89,7 +89,7 @@ export function CustomerApp() {
 
   return (
     <QueryClientProvider client={client}>
-      <div className="min-h-full bg-[#F6F8F4]">{token ? <SignedIn onSignOut={signOut} onToken={signedIn} /> : <Welcome onSignedIn={signedIn} />}</div>
+      <div className="min-h-full bg-cream">{token ? <SignedIn onSignOut={signOut} onToken={signedIn} /> : <Welcome onSignedIn={signedIn} />}</div>
       <Tracking />
     </QueryClientProvider>
   );
@@ -118,7 +118,7 @@ function Welcome({ onSignedIn }: { onSignedIn: (r: ShopLoginResult) => void }) {
     <div className="mx-auto max-w-md px-5 pb-10">
       <header className="flex items-center gap-2 pt-6">
         <Leaf className="h-8 w-8" />
-        <span className="text-lg font-bold text-brand-dark">Mercearia Saudável</span>
+        <span className="font-display text-xl font-semibold text-brand">Mercearia <i>Saudável</i></span>
       </header>
       <section className="mt-6 rounded-3xl bg-gradient-to-br from-brand to-brand-dark p-6 text-white shadow-lg">
         <p className="text-sm font-medium text-brand-accent">Clube Mercearia · grátis</p>
@@ -296,7 +296,7 @@ function Shell({ me, onSignOut, onToken }: { me: ShopMe; onSignOut: () => void; 
       <div className="mx-auto min-h-screen max-w-md pb-24">
         <header className="flex items-center gap-2 px-5 pb-2 pt-5">
           <Leaf className="h-7 w-7" />
-          <span className="font-bold text-brand-dark">Mercearia Saudável</span>
+          <span className="font-display text-lg font-semibold text-brand">Mercearia <i>Saudável</i></span>
         </header>
         <main className="px-4">
           <Routes>

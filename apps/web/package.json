@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource-variable/fraunces": "^5.3.0",
     "@mercearia/contracts": "*",
     "@tanstack/react-query": "^5.83.0",
     "papaparse": "^5.7.1",

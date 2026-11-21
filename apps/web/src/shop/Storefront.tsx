@@ -60,12 +60,12 @@ function Shop() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F6F8F4]">
+    <div className="min-h-screen bg-cream">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <Link to="/loja" className="flex items-center gap-2">
             <Leaf className="h-8 w-8" />
-            <span className="text-lg font-bold text-brand-dark">{info.data?.storeName || 'Mercearia Saudável'}</span>
+            <span className="font-display text-xl font-semibold text-brand">{info.data?.storeName || 'Mercearia Saudável'}</span>
           </Link>
           <div className="flex-1" />
           <a href="/app" className="hidden text-sm font-medium text-brand sm:block">
