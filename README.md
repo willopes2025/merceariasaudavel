@@ -208,3 +208,21 @@ Portado do assistente da Plataforma Aritana e adaptado à Mercearia. Fica em **G
 - **Chaves no `.env` do servidor:** `ANTHROPIC_API_KEY` (obrigatória para ligar), `OPENAI_API_KEY`
   (microfone e voz), `ELEVENLABS_API_KEY` (voz mais natural), `SMTP_*` (e-mail das rotinas).
 - Teste dos conjuntos no banco: `ASSISTANT_DB_TEST=1 npx vitest run src/modules/assistant` (em apps/api).
+
+## Fase 2f — WhatsApp com IA
+
+Em **Crescer › WhatsApp com IA** (ver: quem vê clientes; responder: quem cadastra clientes; configurar: gestão).
+
+- **Atendimento:** uma conversa por cliente (ligada ao cadastro pelo celular, com e sem o 9), filtros
+  abertas / precisam da equipe / IA atendendo / minhas / resolvidas, assumir, resolver e reabrir.
+  O que sai pelo celular da loja, pelo assistente e pela IA também aparece na conversa.
+- **Produto e carrinho na conversa:** manda a ficha do produto com preço e link, ou monta um carrinho
+  e manda o link `/loja?c=…`, que abre a loja online já com os itens (vale 7 dias).
+- **Agente de IA:** responde sozinho com o catálogo do app (preço, preço de membro, ofertas, o que tem),
+  monta o carrinho, informa entrega e clube, mostra o cashback e a situação dos pedidos da cliente, e chama
+  a equipe em reclamação, troca, pagamento ou quando pedem uma pessoa. Para quando a equipe responde e
+  depois de N respostas seguidas. Junta mensagens seguidas antes de responder.
+- **Canal (no `.env` do servidor):** Z-API (`ZAPI_*` + `WHATSAPP_INBOUND_SECRET`) ou API oficial
+  (`META_WA_*`). Na API oficial, fora das 24 h a tela pede um modelo aprovado. A URL de entrada para colar
+  na Z-API ou na Meta aparece em **Configurar**.
+- Testes: `scripts/e2e-whatsapp.mjs` com a API rodando em `WHATSAPP_PROVIDER=teste`.

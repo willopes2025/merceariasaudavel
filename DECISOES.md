@@ -154,3 +154,12 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
   da requisição). Usuário desativado pausa as rotinas dele.
 - Anexos ficam no banco (bytea), não em disco: o backup do Postgres já cobre.
 - Chaves de IA, voz e SMTP só no `.env` do servidor; nada disso é editável pela tela.
+
+## WhatsApp
+- Um único ponto de envio (`WhatsappSender`) com provedores trocáveis: Z-API, Meta Cloud API, webhook
+  genérico e teste. Tudo que sai é anotado na conversa (quem mandou: equipe, IA ou sistema).
+- Entrada da Z-API protegida por segredo na URL (`WHATSAPP_INBOUND_SECRET`); da Meta, pela assinatura
+  `X-Hub-Signature-256` com o segredo do app. Mensagem repetida pelo provedor não duplica (id externo único).
+- O agente de IA só lê o catálogo público, as regras da loja e os dados da própria cliente; não altera nada
+  além do carrinho por link e de chamar a equipe. Equipe respondendo pausa a IA naquela conversa.
+- Carrinho por link guardado no servidor (não na URL) por 7 dias; produtos indisponíveis ficam de fora ao abrir.

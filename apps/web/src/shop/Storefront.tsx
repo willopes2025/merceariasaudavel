@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { BrowserRouter, Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { formatMoney, formatPhone, productPath, whatsappLink, type ShopCatalog, type ShopKit, type ShopLoginResult, type ShopMe, type ShopProduct } from '@mercearia/contracts';
@@ -53,6 +53,35 @@ function Shop() {
   };
   const onAdd = ordering ? (p: ShopProduct) => add(p) : undefined;
 
+  // Link de carrinho mandado pelo WhatsApp (/loja?c=...): já abre com os produtos dentro.
+  const catalogo = useCatalog();
+  const linkUsado = useRef(false);
+  const [avisoLink, setAvisoLink] = useState<string | null>(null);
+  useEffect(() => {
+    const codigo = new URLSearchParams(window.location.search).get('c');
+    if (!codigo || !catalogo.data || linkUsado.current) return;
+    linkUsado.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('c');
+    window.history.replaceState(null, '', url.pathname + url.search);
+    shopApi<{ items: Array<{ productId: string; quantity: number }> }>(`/wa-carts/${encodeURIComponent(codigo)}`)
+      .then((r) => {
+        const porId = new Map(catalogo.data!.products.map((p) => [p.id, p]));
+        const comOpcoes: ShopProduct[] = [];
+        let fora = 0;
+        for (const i of r.items) {
+          const p = porId.get(i.productId);
+          if (!p || !p.available) fora++;
+          else if (p.optionGroups.length) comOpcoes.push(p);
+          else cart.add(p, i.quantity);
+        }
+        if (comOpcoes[0]) setPicking(comOpcoes[0]);
+        setAvisoLink(fora ? `${fora} produto(s) do link não estão disponíveis agora.` : comOpcoes.length > 1 ? 'Alguns produtos têm opções: escolha e adicione cada um.' : null);
+        if (!comOpcoes.length) setCartOpen(true);
+      })
+      .catch((e: Error) => setAvisoLink(e.message));
+  }, [catalogo.data, cart]);
+
   async function checkout() {
     track('InitiateCheckout', { value: cart.total(true), ids: cart.lines.map((l) => l.product.id) });
     if (!customerSession.token()) return setAuth(true);
@@ -79,6 +108,12 @@ function Shop() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 pb-24">
+        {avisoLink && (
+          <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span>{avisoLink}</span>
+            <button onClick={() => setAvisoLink(null)} aria-label="Fechar aviso">✕</button>
+          </div>
+        )}
         <Routes>
           <Route path="/loja" element={<Home onAdd={onAdd} onAddKit={ordering ? (k) => k.items.forEach((i) => add(i.product, i.quantity)) : undefined} onJoin={() => setAuth(true)} signedIn={signedIn} />} />
           <Route path="/loja/p/:id/*" element={<ProductPage onAdd={ordering ? add : undefined} />} />

@@ -40,6 +40,16 @@ services:
       DB_ISOLATION: ${DB_ISOLATION:-on}
       DB_POOL_MAX: ${DB_POOL_MAX:-10}
       APP_VERSION: ${APP_VERSION:-fase-1}
+      # WhatsApp: Z-API (QR Code) ou API oficial (Meta). Sem as chaves, fica desligado.
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-}
+      WHATSAPP_INBOUND_SECRET: ${WHATSAPP_INBOUND_SECRET:-}
+      ZAPI_INSTANCE_ID: ${ZAPI_INSTANCE_ID:-}
+      ZAPI_TOKEN: ${ZAPI_TOKEN:-}
+      ZAPI_CLIENT_TOKEN: ${ZAPI_CLIENT_TOKEN:-}
+      META_WA_TOKEN: ${META_WA_TOKEN:-}
+      META_WA_PHONE_ID: ${META_WA_PHONE_ID:-}
+      META_WA_APP_SECRET: ${META_WA_APP_SECRET:-}
+      META_WA_VERIFY_TOKEN: ${META_WA_VERIFY_TOKEN:-}
       WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
       # Pagamento online (Mercado Pago). Sem a chave, fica desligado.
       PUBLIC_URL: ${PUBLIC_URL:-https://mercearia.wideic.com}

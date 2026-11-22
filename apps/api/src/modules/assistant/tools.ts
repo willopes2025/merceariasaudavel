@@ -722,7 +722,7 @@ export class FerramentasAssistente {
       executar: async (e: z.infer<typeof schema>, ctx) => {
         const c = await this.prisma.customer.findFirst({ where: { id: e.clienteId, tenantId: ctx.usuario.ctx.tenantId } });
         if (!c?.phone || !c.allowWhatsapp) throw new BadRequestException('Cliente sem WhatsApp liberado.');
-        const r = await this.whatsapp.sendText(c.phone, this.preencher(e.texto, c, await this.loja(ctx.usuario.ctx.tenantId)));
+        const r = await this.whatsapp.sendText(c.phone, this.preencher(e.texto, c, await this.loja(ctx.usuario.ctx.tenantId)), { tenantId: ctx.usuario.ctx.tenantId, author: 'equipe', userId: ctx.usuario.id });
         if (!r.ok) throw new BadRequestException(r.reason);
         if (e.motivo) await this.growth.contact(ctx.usuario.ctx, { customerId: c.id, productId: e.produtoId ?? null, kind: e.motivo }).catch(() => undefined);
         await this.audit.record(ctx.usuario.ctx, 'assistant.whatsapp', 'customer', c.id, { via: 'assistente' });
@@ -778,7 +778,7 @@ export class FerramentasAssistente {
         await ctx.progresso?.(0, validos.length, 0);
         for (const [n, i] of validos.entries()) {
           if (n > 0) await new Promise((r) => setTimeout(r, Math.round(intervalo * 1000 * (0.75 + Math.random() * 0.5))));
-          const r = await this.whatsapp.sendText(i.telefone!, i.texto);
+          const r = await this.whatsapp.sendText(i.telefone!, i.texto, { tenantId: ctx.usuario.ctx.tenantId, author: 'equipe', userId: ctx.usuario.id });
           if (r.ok) {
             enviados++;
             if (e.motivo) await this.growth.contact(ctx.usuario.ctx, { customerId: i.clienteId, productId: null, kind: e.motivo }).catch(() => undefined);

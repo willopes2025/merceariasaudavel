@@ -66,7 +66,7 @@ export const NAV: NavGroup[] = [
     label: 'Crescer',
     items: [
       { label: 'Clientes e membros', path: '/clientes', phase: 0, permission: 'customer.view' },
-      { label: 'WhatsApp com IA', path: '/whatsapp', phase: 2, description: 'Inbox da equipe, catálogo na conversa e agente de IA que tira dúvida e monta o carrinho.' },
+      { label: 'WhatsApp com IA', path: '/whatsapp', phase: 0, permission: 'customer.view' },
       { label: 'Recompra e relacionamento', path: '/recompra', phase: 0, permission: 'customer.view' },
       { label: 'Campanhas e cupons', path: '/campanhas', phase: 0, permission: 'campaign.manage' },
       { label: 'Parceiros (nutris e personais)', path: '/parceiros', phase: 0, permission: 'partner.manage' },
