@@ -78,6 +78,9 @@ export const NAV: NavGroup[] = [
     key: 'financeiro',
     label: 'Financeiro e fiscal',
     items: [
+      { label: 'DRE', path: '/dre', phase: 0, permission: 'finance.view' },
+      { label: 'Fluxo de caixa', path: '/fluxo', phase: 0, permission: 'finance.view' },
+      { label: 'Contas a receber', path: '/receber', phase: 0, permission: 'finance.view' },
       { label: 'Contas a pagar', path: '/pagar', phase: 0, permission: 'finance.view' },
       { label: 'Notas fiscais', path: '/fiscal', phase: 0, permission: 'fiscal.view' },
     ],

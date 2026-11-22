@@ -27,9 +27,9 @@ const PIX_MINUTES = 15;
 const CARD_MINUTES = 60;
 /** Consulta ao provedor no máximo a cada tantos ms por pagamento (a tela pergunta de 4 em 4 s). */
 const CHECK_EVERY_MS = 4_000;
-const METHOD_NAME: Record<OnlineMethod, { name: string; kind: string }> = {
-  pix: { name: 'Pix online', kind: 'pix' },
-  cartao: { name: 'Cartão online', kind: 'credito' },
+const METHOD_NAME: Record<OnlineMethod, { name: string; kind: string; feePct: number; settleDays: number }> = {
+  pix: { name: 'Pix online', kind: 'pix', feePct: 0.99, settleDays: 0 },
+  cartao: { name: 'Cartão online', kind: 'credito', feePct: 4.98, settleDays: 30 },
 };
 
 type Row = Prisma.OnlinePaymentGetPayload<object>;
@@ -299,7 +299,7 @@ export class PaymentsService {
   /** Formas "Pix online" e "Cartão online" (criadas na primeira vez). */
   private async methodId(tenantId: string, method: OnlineMethod): Promise<string> {
     const m = METHOD_NAME[method];
-    const row = await this.prisma.paymentMethod.upsert({ where: { tenantId_name: { tenantId, name: m.name } }, create: { tenantId, name: m.name, kind: m.kind }, update: { active: true } });
+    const row = await this.prisma.paymentMethod.upsert({ where: { tenantId_name: { tenantId, name: m.name } }, create: { tenantId, name: m.name, kind: m.kind, feePct: m.feePct, settleDays: m.settleDays }, update: { active: true } });
     return row.id;
   }
 

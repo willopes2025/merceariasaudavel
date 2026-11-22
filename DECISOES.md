@@ -163,3 +163,13 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - O agente de IA só lê o catálogo público, as regras da loja e os dados da própria cliente; não altera nada
   além do carrinho por link e de chamar a equipe. Equipe respondendo pausa a IA naquela conversa.
 - Carrinho por link guardado no servidor (não na URL) por 7 dias; produtos indisponíveis ficam de fora ao abrir.
+
+## Contas a receber e DRE
+- Recebíveis nascem dos movimentos de caixa (recebimento/estorno) de forma idempotente, sempre que o financeiro é
+  consultado: nenhum fluxo de venda precisou mudar, e o histórico anterior também ganhou recebíveis.
+- Taxa e prazo vêm da forma de pagamento no momento da venda; mudar as taxas recalcula só o que está em aberto.
+- DRE por competência: venda pela data da venda; despesas pelo vencimento; mercadoria e insumos pagos ficam fora
+  (o custo entra pelo CMV); cashback concedido é despesa de venda quando é gerado (o usado é forma de pagamento).
+- DRE por caixa: entradas pelo dia em que o dinheiro caiu (líquido de taxa) e saídas pelo dia do pagamento.
+- Por canal: custos e taxas de cada venda vão direto para o canal; perdas e despesas fixas são rateadas pela
+  receita, e a tela marca o que é rateio.

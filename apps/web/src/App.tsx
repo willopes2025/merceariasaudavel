@@ -71,6 +71,9 @@ const LossesScreen = screen(() => import('./screens/kitchen/KitchenScreens'), (m
 const CustomersScreen = screen(() => import('./screens/customers/CustomersScreens'), (m) => m.CustomersScreen);
 const CustomerScreen = screen(() => import('./screens/customers/CustomersScreens'), (m) => m.CustomerScreen);
 const PayablesScreen = screen(() => import('./screens/finance/PayablesScreen'), (m) => m.PayablesScreen);
+const ReceivablesScreen = screen(() => import('./screens/finance/ReceivablesScreen'), (m) => m.ReceivablesScreen);
+const DreScreen = screen(() => import('./screens/finance/DreScreen'), (m) => m.DreScreen);
+const CashflowScreen = screen(() => import('./screens/finance/CashflowScreen'), (m) => m.CashflowScreen);
 const ReportScreen = screen(() => import('./screens/finance/ReportScreen'), (m) => m.ReportScreen);
 
 const queryClient = new QueryClient({
@@ -188,6 +191,9 @@ export function App() {
             <Route path="clientes" element={<CustomersScreen />} />
             <Route path="clientes/:id" element={<CustomerScreen />} />
             <Route path="pagar" element={<PayablesScreen />} />
+            <Route path="receber" element={<ReceivablesScreen />} />
+            <Route path="dre" element={<DreScreen />} />
+            <Route path="fluxo" element={<CashflowScreen />} />
             <Route path="fiscal" element={<FiscalScreen />} />
             <Route path="configuracoes/lojas" element={<StoresScreen />} />
             <Route path="configuracoes/usuarios" element={<UsersScreen />} />

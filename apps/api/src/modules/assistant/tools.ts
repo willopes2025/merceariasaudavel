@@ -5,7 +5,9 @@ import { CUSTOMER_GOALS, PAYABLE_CATEGORIES, campaignSchema, formatMoney, normal
 import { AuditService } from '../../common/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { DreService } from '../finance/dre.service';
 import { FinanceService } from '../finance/finance.service';
+import { ReceivablesService } from '../finance/receivables.service';
 import { GrowthService } from '../growth/growth.service';
 import { computeRepurchase } from '../growth/repurchase';
 import { ManagementService } from '../management/management.service';
@@ -89,6 +91,8 @@ export class FerramentasAssistente {
     private readonly partners: PartnersService,
     private readonly campaigns: CampaignsService,
     private readonly purchasing: PurchasingService,
+    private readonly dre: DreService,
+    private readonly receivables: ReceivablesService,
   ) {
     this.lista = [
       this.painelDoDia(),
@@ -100,6 +104,8 @@ export class FerramentasAssistente {
       this.fichaCliente(),
       this.oportunidadesClientes(),
       this.consultarFinanceiro(),
+      this.dreFerramenta(),
+      this.contasReceber(),
       this.pedidosEmAndamento(),
       this.parceirosDoMes(),
       this.listarCampanhas(),
@@ -456,6 +462,55 @@ export class FerramentasAssistente {
           porCategoria: [...porCategoria].map(([k, v]) => ({ categoria: (PAYABLE_CATEGORIES as Record<string, string>)[k] ?? k, valor: reais(v) })),
           contas: contas.slice(0, e.limite ?? 50).map((c) => ({ descricao: c.description, fornecedor: c.supplier, vencimento: dataBR(c.dueDate.toISOString().slice(0, 10)), valor: reais(c.amount), situacao: c.status === 'paid' ? `paga em ${dataBR(c.paidDate?.toISOString().slice(0, 10))}` : c.status === 'open' ? (c.dueDate.toISOString().slice(0, 10) < hoje ? 'vencida' : 'a vencer') : c.status })),
         };
+      },
+    };
+  }
+
+  private dreFerramenta(): Ferramenta {
+    const schema = z.object({
+      de: dataIso.describe('Primeiro dia'),
+      ate: dataIso.describe('Último dia (inclusive)'),
+      visao: z.enum(['competencia', 'caixa']).optional().describe('competencia (padrão) = pela data da venda; caixa = pelo dia em que o dinheiro entrou/saiu'),
+      porCanal: z.boolean().optional().describe('Também os valores por canal de venda (balcão, app, loja online…)'),
+    });
+    return {
+      nome: 'dre',
+      descricao: 'DRE gerencial do período (comparado ao período anterior): receita bruta, deduções (preço de membro, ofertas, cupons, impostos), receita líquida, CMV e perdas, lucro bruto, despesas de venda (taxas de cartão/Pix/app, comissões, cashback), despesas operacionais e resultado. Visão competência ou caixa, e por canal. Use para "qual foi o lucro?", "qual canal dá mais lucro?", "quanto pago de taxa?".',
+      schema,
+      risco: 'leitura',
+      permitido: pode('finance.view'),
+      executar: async (e: z.infer<typeof schema>, ctx) => {
+        if (e.ate < e.de) throw new BadRequestException('A data final é antes da inicial.');
+        const d = await this.dre.dre(ctx.usuario.ctx, { from: e.de, to: e.ate, view: e.visao ?? 'competencia' });
+        const canais = d.columns.filter((c) => c.key !== 'total');
+        return {
+          visao: d.view === 'caixa' ? 'caixa' : 'competência',
+          periodo: `${dataBR(d.from)} a ${dataBR(d.to)}`,
+          comparadoCom: `${dataBR(d.previous.from)} a ${dataBR(d.previous.to)}`,
+          linhas: d.lines
+            .filter((l) => l.level < 2 || l.values.total || d.previous.values[l.key])
+            .map((l) => ({
+              linha: `${l.level === 2 ? '  ' : ''}${l.label}`,
+              valor: reais(l.sign * (l.values.total ?? 0)),
+              anterior: reais(l.sign * (d.previous.values[l.key] ?? 0)),
+              ...(e.porCanal ? { porCanal: Object.fromEntries(canais.map((c) => [c.label, reais(l.sign * (l.values[c.key] ?? 0))])), ...(l.allocated ? { rateado: true } : {}) } : {}),
+            })),
+          observacoes: d.notes,
+        };
+      },
+    };
+  }
+
+  private contasReceber(): Ferramenta {
+    return {
+      nome: 'contas_a_receber',
+      descricao: 'Recebíveis das vendas (cartão no prazo da maquininha, já sem taxa): quanto cai hoje, em 7 e 30 dias, o que atrasou, por forma de pagamento, e as taxas pagas no mês.',
+      schema: z.object({}),
+      risco: 'leitura',
+      permitido: pode('finance.view'),
+      executar: async (_e, ctx) => {
+        const r = await this.receivables.summary(ctx.usuario.ctx);
+        return { caiHoje: reais(r.today), proximos7dias: reais(r.next7), proximos30dias: reais(r.next30), atrasado: reais(r.overdue), totalAReceber: reais(r.open), taxasPagasNoMes: reais(r.feesMonth), porForma: r.byMethod.map((m) => ({ forma: m.name, aReceber: reais(m.open), atrasado: reais(m.overdue), proximaData: dataBR(m.nextDate) })) };
       },
     };
   }

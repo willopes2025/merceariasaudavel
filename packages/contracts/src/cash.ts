@@ -23,11 +23,12 @@ export interface PaymentMethod {
 }
 
 /** Formas de pagamento com que toda organização nasce. */
-export const DEFAULT_PAYMENT_METHODS: Array<{ name: string; kind: PaymentKind }> = [
+/** Formas padrão, com taxas e prazos de partida (cada loja ajusta para as da sua maquininha). */
+export const DEFAULT_PAYMENT_METHODS: Array<{ name: string; kind: PaymentKind; feePct?: number; settleDays?: number }> = [
   { name: 'Dinheiro', kind: 'dinheiro' },
   { name: 'Pix', kind: 'pix' },
-  { name: 'Cartão de débito', kind: 'debito' },
-  { name: 'Cartão de crédito', kind: 'credito' },
+  { name: 'Cartão de débito', kind: 'debito', feePct: 1.5, settleDays: 1 },
+  { name: 'Cartão de crédito', kind: 'credito', feePct: 3.5, settleDays: 30 },
 ];
 
 export const CASH_MOVEMENT_TYPES = {

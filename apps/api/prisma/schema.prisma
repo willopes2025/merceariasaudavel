@@ -78,6 +78,8 @@ model TenantSetting {
   assistantConfig    Json?    @map("assistant_config")
   /// WhatsApp: agente de IA do atendimento (liga/desliga, nome, orientações, limite de respostas).
   whatsappConfig     Json?    @map("whatsapp_config")
+  /// Financeiro: alíquota estimada de impostos sobre vendas (DRE por competência).
+  financeConfig      Json?    @map("finance_config")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -443,6 +445,13 @@ model PaymentMethod {
   /// dinheiro | pix | debito | credito | cashback | outro
   kind     String
   active   Boolean @default(true)
+  /// Taxa da maquininha / gateway (% do valor) e taxa fixa por transação.
+  feePct     Decimal @default(0) @map("fee_pct") @db.Decimal(6, 3)
+  feeFixed   Decimal @default(0) @map("fee_fixed") @db.Decimal(10, 2)
+  /// Dias corridos até o dinheiro cair (0 = na hora).
+  settleDays Int     @default(0) @map("settle_days")
+  /// Exige conferir o extrato para dar baixa (senão, baixa sozinho no dia previsto).
+  reconcile  Boolean @default(false)
 
   tenant    Tenant         @relation(fields: [tenantId], references: [id])
   movements CashMovement[]
@@ -1444,4 +1453,34 @@ model WaCart {
 
   @@index([tenantId])
   @@map("wa_cart")
+}
+
+/// Conta a receber: o que cada pagamento de venda vai render (líquido de taxa) e quando cai; ou um recebimento avulso.
+model Receivable {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  storeId        String?   @map("store_id")
+  movementId     String?   @unique @map("movement_id")
+  saleId         String?   @map("sale_id")
+  methodId       String?   @map("method_id")
+  /// venda | estorno | avulso
+  kind           String
+  description    String
+  gross          Decimal   @db.Decimal(12, 2)
+  fee            Decimal   @default(0) @db.Decimal(12, 2)
+  net            Decimal   @db.Decimal(12, 2)
+  /// Data da venda (competência).
+  saleDate       DateTime  @map("sale_date") @db.Date
+  /// Quando deve cair (caixa previsto).
+  dueDate        DateTime  @map("due_date") @db.Date
+  /// aberto | recebido | cancelado
+  status         String    @default("aberto")
+  receivedDate   DateTime? @map("received_date") @db.Date
+  receivedAmount Decimal?  @map("received_amount") @db.Decimal(12, 2)
+  note           String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, dueDate])
+  @@index([tenantId, saleDate])
+  @@map("receivable")
 }

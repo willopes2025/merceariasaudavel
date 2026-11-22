@@ -226,3 +226,21 @@ Em **Crescer › WhatsApp com IA** (ver: quem vê clientes; responder: quem cada
   (`META_WA_*`). Na API oficial, fora das 24 h a tela pede um modelo aprovado. A URL de entrada para colar
   na Z-API ou na Meta aparece em **Configurar**.
 - Testes: `scripts/e2e-whatsapp.mjs` com a API rodando em `WHATSAPP_PROVIDER=teste`.
+
+## Financeiro: contas a receber, DRE e fluxo de caixa
+
+Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `finance.manage`).
+
+- **Taxas e prazos** (Contas a receber › Taxas e prazos): % e taxa fixa da maquininha/gateway, em quantos dias
+  cai e se exige conferir o extrato. Ao salvar, o que está a receber é recalculado.
+- **Contas a receber:** cada pagamento de venda vira um recebível (bruto, taxa, líquido, quando cai). Pix e dinheiro
+  caem na hora; cartão no prazo. Sem "conferir extrato", baixa sozinho no dia; com ele, alguém marca "Recebi" (pode
+  informar o valor que caiu de fato). Venda cancelada antes de cair: venda e estorno se anulam. Recebimento avulso
+  para o que não é venda.
+- **DRE** (competência ou caixa, por mês ou período, total ou por canal, com o período anterior):
+  receita bruta → deduções (preço de membro, ofertas, cupons, parceiros, descontos, impostos) → receita líquida →
+  CMV e perdas → lucro bruto → despesas de venda (taxas, comissões, cashback) → despesas operacionais → resultado.
+  Alíquota estimada de impostos em DRE › Configurar. Compras de mercadoria só entram no caixa (na competência o
+  custo é o CMV). Nas colunas por canal, perdas e despesas fixas são rateadas pela receita (÷).
+- **Fluxo de caixa:** por dia, o que entrou/saiu e o que vai entrar/sair, com saldo acumulado a partir do saldo inicial.
+- O Assistente responde sobre isso (`dre`, `contas_a_receber`).

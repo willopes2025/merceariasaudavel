@@ -98,3 +98,146 @@ export function monthlyDueDates(first: string, count: number): string[] {
     return date.toISOString().slice(0, 10);
   });
 }
+
+// ───────────── Contas a receber, taxas, DRE e fluxo de caixa ─────────────
+
+export const RECEIVABLE_STATUS = { aberto: 'A receber', recebido: 'Recebido', cancelado: 'Cancelado' } as const;
+export type ReceivableStatus = keyof typeof RECEIVABLE_STATUS;
+
+export interface Receivable {
+  id: string;
+  kind: 'venda' | 'estorno' | 'avulso';
+  description: string;
+  methodName: string | null;
+  channel: string | null;
+  gross: number;
+  fee: number;
+  net: number;
+  saleDate: string;
+  dueDate: string;
+  status: ReceivableStatus;
+  receivedDate: string | null;
+  receivedAmount: number | null;
+  note: string | null;
+}
+
+export interface ReceivablesSummary {
+  today: number;
+  next7: number;
+  next30: number;
+  overdue: number;
+  open: number;
+  feesMonth: number;
+  byMethod: Array<{ name: string; open: number; overdue: number; nextDate: string | null }>;
+}
+
+export const receivableQuery = z.object({
+  status: z.enum(['aberto', 'vencido', 'recebido', 'cancelado', 'todos']).default('aberto'),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+  methodId: z.string().uuid().optional(),
+  search: z.string().max(60).optional(),
+});
+export type ReceivableQuery = z.infer<typeof receivableQuery>;
+
+export const receivableSettleSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, 'Escolha o que recebeu').max(1000),
+  receivedDate: isoDate,
+  /** Só com um item: valor que caiu de fato (a diferença fica registrada). */
+  amount: z.preprocess((v) => (v === '' || v == null ? undefined : typeof v === 'string' ? Number(v.replace(/\./g, '').replace(',', '.')) : v), z.number().min(0).max(10_000_000).optional()),
+  note: z.string().trim().max(300).optional(),
+});
+export type ReceivableSettleInput = z.infer<typeof receivableSettleSchema>;
+
+export const receivableManualSchema = z.object({
+  description: z.string().trim().min(2, 'Descreva o recebimento').max(150),
+  amount: money,
+  dueDate: isoDate,
+  note: z.string().trim().max(300).optional(),
+});
+export type ReceivableManualInput = z.infer<typeof receivableManualSchema>;
+
+export interface PaymentMethodFees {
+  id: string;
+  name: string;
+  kind: string;
+  active: boolean;
+  feePct: number;
+  feeFixed: number;
+  settleDays: number;
+  reconcile: boolean;
+}
+
+export const paymentFeesSchema = z.object({
+  methods: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        feePct: z.number().min(0).max(30, 'Taxa acima de 30%? Confira'),
+        feeFixed: z.number().min(0).max(100),
+        settleDays: z.number().int().min(0).max(365),
+        reconcile: z.boolean(),
+      }),
+    )
+    .min(1),
+});
+export type PaymentFeesInput = z.infer<typeof paymentFeesSchema>;
+
+export const financeConfigSchema = z.object({
+  /** Alíquota estimada de impostos sobre as vendas (ex.: Simples Nacional). 0 = usa os impostos lançados em contas a pagar. */
+  impostoPct: z.number().min(0).max(40).default(0),
+});
+export type FinanceConfig = z.infer<typeof financeConfigSchema>;
+
+export type DreView = 'competencia' | 'caixa';
+export const dreQuery = z
+  .object({ from: isoDate, to: isoDate, view: z.enum(['competencia', 'caixa']).default('competencia'), storeId: z.string().uuid().optional() })
+  .refine((r) => r.from <= r.to, { path: ['to'], message: 'A data final é antes da inicial' });
+export type DreQuery = z.infer<typeof dreQuery>;
+
+export interface DreLine {
+  key: string;
+  label: string;
+  /** 0 = resultado/subtotal, 1 = grupo, 2 = detalhe. */
+  level: 0 | 1 | 2;
+  /** Sinal de exibição: receita (+) ou dedução/despesa (−). */
+  sign: 1 | -1;
+  /** Valor por coluna (total e cada canal). */
+  values: Record<string, number>;
+  /** Linha rateada entre os canais (não é custo direto do canal). */
+  allocated?: boolean;
+}
+
+export interface Dre {
+  from: string;
+  to: string;
+  view: DreView;
+  columns: Array<{ key: string; label: string }>;
+  lines: DreLine[];
+  previous: { from: string; to: string; values: Record<string, number> };
+  notes: string[];
+}
+
+export const cashflowQuery = z
+  .object({ from: isoDate, to: isoDate, opening: z.coerce.number().min(-100_000_000).max(100_000_000).default(0) })
+  .refine((r) => r.from <= r.to, { path: ['to'], message: 'A data final é antes da inicial' });
+export type CashflowQuery = z.infer<typeof cashflowQuery>;
+
+export interface CashflowDay {
+  date: string;
+  inDone: number;
+  inExpected: number;
+  outDone: number;
+  outExpected: number;
+  net: number;
+  balance: number;
+}
+
+export interface Cashflow {
+  from: string;
+  to: string;
+  opening: number;
+  days: CashflowDay[];
+  totals: { in: number; out: number; net: number };
+  overdue: { receivables: number; payables: number };
+}
