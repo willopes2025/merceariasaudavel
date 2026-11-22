@@ -173,3 +173,14 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - DRE por caixa: entradas pelo dia em que o dinheiro caiu (líquido de taxa) e saídas pelo dia do pagamento.
 - Por canal: custos e taxas de cada venda vão direto para o canal; perdas e despesas fixas são rateadas pela
   receita, e a tela marca o que é rateio.
+
+## Plano de contas, contas financeiras e ponto
+- O que vem das vendas continua calculado (não vira lançamento); o plano de contas classifica só o que é lançado.
+  Grupo do DRE fica na conta; a hierarquia sai do código.
+- Categoria antiga das contas a pagar foi mapeada para o plano na primeira consulta e continua aceita na API.
+- Saldo de conta = saldo inicial + lançamentos a partir da data do saldo inicial. Recebíveis recebidos e contas pagas
+  geram o lançamento sozinhos; desfazer o pagamento/recebimento apaga o lançamento.
+- Ponto: a batida original é imutável (gatilho no banco); toda correção é um ajuste à parte com motivo e autor.
+  PIN guardado com hash e trava de 5 tentativas. Cálculo de jornada reaproveitado da Aritana (com os testes).
+- Varredura: RLS em `ai_usage` (única tabela com empresa sem isolamento), cabeçalhos de segurança, textos de ótica
+  removidos e correção do formulário de contas a pagar (categoria padrão inválida).

@@ -21,6 +21,7 @@ export const PERMISSIONS = {
   cashClose: 'cash.close',
   financeView: 'finance.view',
   financeManage: 'finance.manage',
+  hrManage: 'hr.manage',
   stockView: 'stock.view',
   stockAdjust: 'stock.adjust',
   /** Lançar perda e contar os insumos do dia. */
@@ -56,6 +57,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'cash.close': 'Fechar o caixa',
   'finance.view': 'Ver o financeiro',
   'finance.manage': 'Lançar e baixar no financeiro',
+  'hr.manage': 'Gerenciar funcionários e ponto',
   'stock.view': 'Ver estoque',
   'stock.adjust': 'Dar entrada e acertar estoque',
   'stock.loss': 'Lançar perdas e contar insumos',
@@ -232,6 +234,7 @@ export * from './cash';
 export * from './products';
 export * from './sales';
 export * from './kitchen';
+export * from './hr';
 export * from './goals';
 export * from './finance';
 export * from './fiscal';

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PAYMENT_KINDS, RECEIVABLE_STATUS, formatMoney, todayBR, type PaymentMethodFees, type Receivable, type ReceivablesSummary } from '@mercearia/contracts';
+import { PAYMENT_KINDS, RECEIVABLE_STATUS, formatMoney, todayBR, type FinancialAccount, type PaymentMethodFees, type Receivable, type ReceivablesSummary } from '@mercearia/contracts';
 import { api, can } from '../../lib/api';
 import { Drawer, Empty, ErrorBox, Field, Loading, PageHeader } from '../../components/ui';
 import { formatDay } from '../../components/format';
@@ -200,10 +200,11 @@ function Novo({ onClose, onDone }: { onClose: () => void; onDone: () => void }) 
 function Taxas() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['receber', 'taxas'], queryFn: () => api<PaymentMethodFees[]>('/payment-fees') });
+  const contas = useQuery({ queryKey: ['contas-financeiras'], queryFn: () => api<FinancialAccount[]>('/financial-accounts') });
   const [f, setF] = useState<PaymentMethodFees[] | null>(null);
   const v = f ?? q.data ?? [];
   const mudou = useMemo(() => !!f && JSON.stringify(f) !== JSON.stringify(q.data), [f, q.data]);
-  const salvar = useMutation({ mutationFn: () => api<PaymentMethodFees[]>('/payment-fees', { method: 'PUT', json: { methods: v.map(({ id, feePct, feeFixed, settleDays, reconcile }) => ({ id, feePct, feeFixed, settleDays, reconcile })) } }), onSuccess: () => { setF(null); qc.invalidateQueries({ queryKey: ['receber'] }); qc.invalidateQueries({ queryKey: ['dre'] }); } });
+  const salvar = useMutation({ mutationFn: () => api<PaymentMethodFees[]>('/payment-fees', { method: 'PUT', json: { methods: v.map(({ id, feePct, feeFixed, settleDays, reconcile, accountId }) => ({ id, feePct, feeFixed, settleDays, reconcile, accountId })) } }), onSuccess: () => { setF(null); qc.invalidateQueries({ queryKey: ['receber'] }); qc.invalidateQueries({ queryKey: ['dre'] }); } });
   const gestao = can('finance.manage');
   const mexer = (id: string, campo: keyof PaymentMethodFees, valor: number | boolean) => setF(v.map((m) => (m.id === id ? { ...m, [campo]: valor } : m)));
   if (q.isLoading) return <Loading />;
@@ -213,7 +214,7 @@ function Taxas() {
       <div className="card overflow-x-auto">
         <table className="table">
           <thead>
-            <tr><th>Forma</th><th>Taxa (%)</th><th>Taxa fixa (R$)</th><th>Cai em (dias)</th><th>Conferir extrato</th></tr>
+            <tr><th>Forma</th><th>Taxa (%)</th><th>Taxa fixa (R$)</th><th>Cai em (dias)</th><th>Cai na conta</th><th>Conferir extrato</th></tr>
           </thead>
           <tbody>
             {v.map((m) => (
@@ -222,6 +223,7 @@ function Taxas() {
                 <td><input className="input w-24" type="number" step="0.01" min={0} max={30} disabled={!gestao} aria-label={`Taxa de ${m.name}`} value={m.feePct} onChange={(e) => mexer(m.id, 'feePct', Number(e.target.value))} /></td>
                 <td><input className="input w-24" type="number" step="0.01" min={0} disabled={!gestao} aria-label={`Taxa fixa de ${m.name}`} value={m.feeFixed} onChange={(e) => mexer(m.id, 'feeFixed', Number(e.target.value))} /></td>
                 <td><input className="input w-20" type="number" min={0} max={365} disabled={!gestao} aria-label={`Prazo de ${m.name}`} value={m.settleDays} onChange={(e) => mexer(m.id, 'settleDays', Math.round(Number(e.target.value)))} /></td>
+                <td><select className="input w-48" disabled={!gestao} aria-label={`Conta de ${m.name}`} value={m.accountId ?? ''} onChange={(e) => setF(v.map((x) => (x.id === m.id ? { ...x, accountId: e.target.value || null } : x)))}><option value="">—</option>{(contas.data ?? []).filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
                 <td><input type="checkbox" disabled={!gestao || m.settleDays === 0} aria-label={`Conferir extrato de ${m.name}`} checked={m.reconcile && m.settleDays > 0} onChange={(e) => mexer(m.id, 'reconcile', e.target.checked)} /></td>
               </tr>
             ))}

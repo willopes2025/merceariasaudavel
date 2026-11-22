@@ -146,7 +146,7 @@ function ConfigDrawer({ config, onClose, onSaved }: { config: FiscalConfig; onCl
         </Field>
         <div className="rounded-lg bg-slate-50 p-3">
           <h3 className="mb-2 text-sm font-semibold">Tributação dos itens</h3>
-          <p className="mb-3 text-xs text-ink-soft">O padrão serve para ótica no Simples Nacional vendendo dentro do estado. Confirme com a contabilidade antes de ir para produção.</p>
+          <p className="mb-3 text-xs text-ink-soft">O padrão serve para comércio no Simples Nacional vendendo dentro do estado. Confirme com a contabilidade antes de ir para produção.</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="CFOP" hint="5102 = venda de mercadoria">
               <input className="input tabular-nums" inputMode="numeric" value={cfop} onChange={(e) => setCfop(e.target.value)} />

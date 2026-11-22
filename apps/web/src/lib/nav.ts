@@ -82,7 +82,18 @@ export const NAV: NavGroup[] = [
       { label: 'Fluxo de caixa', path: '/fluxo', phase: 0, permission: 'finance.view' },
       { label: 'Contas a receber', path: '/receber', phase: 0, permission: 'finance.view' },
       { label: 'Contas a pagar', path: '/pagar', phase: 0, permission: 'finance.view' },
+      { label: 'Contas e bancos', path: '/contas', phase: 0, permission: 'finance.view' },
+      { label: 'Plano de contas', path: '/plano-de-contas', phase: 0, permission: 'finance.view' },
       { label: 'Notas fiscais', path: '/fiscal', phase: 0, permission: 'fiscal.view' },
+    ],
+  },
+  {
+    key: 'equipe',
+    label: 'Equipe',
+    items: [
+      { label: 'Bater ponto', path: '/bater-ponto', phase: 0 },
+      { label: 'Ponto', path: '/ponto', phase: 0, permission: 'hr.manage' },
+      { label: 'Funcionários', path: '/funcionarios', phase: 0, permission: 'hr.manage' },
     ],
   },
   {

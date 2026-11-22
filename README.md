@@ -244,3 +244,27 @@ Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `financ
   custo é o CMV). Nas colunas por canal, perdas e despesas fixas são rateadas pela receita (÷).
 - **Fluxo de caixa:** por dia, o que entrou/saiu e o que vai entrar/sair, com saldo acumulado a partir do saldo inicial.
 - O Assistente responde sobre isso (`dre`, `contas_a_receber`).
+
+## Gestão financeira completa, funcionários e ponto
+
+- **Plano de contas** (Financeiro › Plano de contas): contas em árvore (5 › 5.1 › 5.1.1), cada uma ligada a um grupo do
+  DRE. O plano padrão nasce sozinho e é editável. "Só no caixa" marca compras de mercadoria/insumos e pagamento de
+  comissão (na competência o valor já entra pelo CMV e pela comissão calculada).
+- **Contas e bancos:** caixa, contas bancárias e carteiras com saldo inicial, extrato, transferência e ajuste.
+  Pagar uma conta escolhe de onde saiu; cada forma de pagamento tem a conta onde o dinheiro cai.
+- **Contas a pagar:** conta do plano, fornecedor do cadastro, competência, nº do documento e conta de pagamento.
+- **DRE em árvore:** grupo → conta → detalhe, com % da receita, % dentro do grupo, período anterior e os lançamentos
+  de cada conta. Vendas e CMV abrem por categoria de produto; taxas, por forma de pagamento. Resultado operacional,
+  financeiro e impostos sobre o lucro; na visão de caixa, também investimentos, empréstimos e retiradas.
+- **Funcionários** (Equipe › Funcionários): cadastro, vínculo, salário, escala, login e PIN do ponto; escalas; regras
+  do ponto (foto, cerca por GPS, locais, feriados).
+- **Ponto** (portado da Aritana): batida com hora do servidor, número sequencial e hash encadeado (imutável no banco),
+  pelo login da pessoa ou por PIN no aparelho da loja; espelho com as regras da CLT, ajustes com motivo, ocorrências
+  (atestado, férias, falta), fechamento do mês com confirmação do funcionário e salários lançados em contas a pagar.
+  Ainda não tem: arquivos AFD/AEJ da Portaria 671 com assinatura digital e envio para a contabilidade.
+- Teste: `scripts/e2e-gestao.mjs`.
+
+### O que os outros sistemas têm e este ainda não
+Conciliação bancária por extrato (OFX) e orçamento por conta (Soul ERP); arquivos legais do ponto, documentos do
+funcionário e envio à contabilidade (Aritana); importação de planilhas, tela de auditoria, comissão de vendedores,
+central de avisos e manual dentro do sistema (Aritana e Soul ERP).

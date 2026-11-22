@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  CATEGORY_TO_CHART,
   LOSS_REASONS,
   addDays,
   monthlyDueDates,
@@ -20,6 +21,7 @@ import { AuditService } from '../../common/audit.service';
 import { ConflictError, DomainError, ForbiddenError, NotFoundError } from '../../common/errors/domain-error';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { canUseStore, type RequestContext } from '../../common/tenancy/request-context';
+import { LedgerService } from './ledger.service';
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const asDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
@@ -32,6 +34,7 @@ export class FinanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly ledger: LedgerService,
   ) {}
 
   // ------------------------------------------------------------ contas a pagar
@@ -52,8 +55,9 @@ export class FinanceService {
       this.prisma.payable.aggregate({ where: { AND: [scope], status: 'open', dueDate: { gte: today, lte: asDate(addDays(todayBR(), 7)) } }, _sum: { amount: true } }),
     ]);
     const stores = await this.storeNames(ctx);
+    const nomes = await this.ledger.names(ctx.tenantId);
     return {
-      items: rows.map((r) => toPayable(r, stores)),
+      items: rows.map((r) => toPayable(r, stores, nomes)),
       total,
       page: q.page,
       pageSize: q.pageSize,
@@ -67,7 +71,22 @@ export class FinanceService {
       if (!canUseStore(ctx, input.storeId)) throw new ForbiddenError('STORE_NOT_ALLOWED', 'Você não trabalha nessa loja.');
       if (!(await this.prisma.store.count({ where: { id: input.storeId, tenantId: ctx.tenantId } }))) throw new DomainError('STORE_NOT_FOUND', 'Loja não encontrada.');
     }
+    await this.ledger.ensure(ctx.tenantId);
+    // Conta do plano: a escolhida, ou a que corresponde à categoria antiga.
+    const conta = input.chartAccountId ? await this.ledger.postable(ctx.tenantId, input.chartAccountId) : await this.ledger.byCode(ctx.tenantId, CATEGORY_TO_CHART[input.category]);
+    let fornecedor = input.supplier || null;
+    if (input.supplierId) {
+      const f = await this.prisma.supplier.findFirst({ where: { id: input.supplierId, tenantId: ctx.tenantId }, select: { name: true } });
+      if (!f) throw new DomainError('SUPPLIER_NOT_FOUND', 'Fornecedor não encontrado.');
+      fornecedor = f.name;
+    }
+    if (input.employeeId) {
+      const e = await this.prisma.employee.findFirst({ where: { id: input.employeeId, tenantId: ctx.tenantId }, select: { name: true } });
+      if (!e) throw new DomainError('EMPLOYEE_NOT_FOUND', 'Funcionário não encontrado.');
+      fornecedor = fornecedor ?? e.name;
+    }
     const dates = monthlyDueDates(input.dueDate, input.repeat);
+    const competencias = input.competence ? monthlyDueDates(input.competence, input.repeat) : dates;
     const created = await this.prisma.$transaction(async (tx) => {
       const out = [];
       for (const [i, due] of dates.entries()) {
@@ -78,11 +97,16 @@ export class FinanceService {
               tenantId: ctx.tenantId,
               storeId: input.storeId ?? null,
               description,
-              supplier: input.supplier || null,
+              supplier: fornecedor,
               category: input.category,
+              chartAccountId: conta?.id ?? null,
+              supplierId: input.supplierId ?? null,
+              employeeId: input.employeeId ?? null,
+              competence: asDate(competencias[i] ?? due),
+              document: input.document ?? null,
               amount: input.amount,
               dueDate: asDate(due),
-              searchText: normalizeText([description, input.supplier].filter(Boolean).join(' ')),
+              searchText: normalizeText([description, fornecedor, input.document].filter(Boolean).join(' ')),
               createdById: ctx.userId,
             },
           }),
@@ -92,30 +116,56 @@ export class FinanceService {
     });
     await this.audit.record(ctx, 'payable.create', 'payable', created[0]!.id, { description: input.description, count: created.length });
     const stores = await this.storeNames(ctx);
-    return created.map((r) => toPayable(r, stores));
+    const nomes = await this.ledger.names(ctx.tenantId);
+    return created.map((r) => toPayable(r, stores, nomes));
   }
 
-  async payPayable(ctx: RequestContext, id: string, paidDate: string, note?: string | null): Promise<Payable> {
+  async payPayable(ctx: RequestContext, id: string, paidDate: string, note?: string | null, accountId?: string | null): Promise<Payable> {
     if (paidDate > todayBR()) throw new DomainError('PAID_IN_FUTURE', 'A data do pagamento não pode ser no futuro.');
-    const done = await this.prisma.payable.updateMany({ where: { id, tenantId: ctx.tenantId, status: 'open' }, data: { status: 'paid', paidDate: asDate(paidDate), note: note ?? null } });
-    if (!done.count) throw await this.notOpen(ctx, id);
-    await this.audit.record(ctx, 'payable.pay', 'payable', id, { paidDate });
+    if (accountId) await this.ledger.account(ctx.tenantId, accountId);
+    await this.prisma.$transaction(async (tx) => {
+      const done = await tx.payable.updateMany({ where: { id, tenantId: ctx.tenantId, status: 'open' }, data: { status: 'paid', paidDate: asDate(paidDate), note: note ?? null, accountId: accountId ?? null } });
+      if (!done.count) throw await this.notOpen(ctx, id);
+      const p = await tx.payable.findUniqueOrThrow({ where: { id } });
+      await this.ledger.postPayable(tx, p, accountId ?? null, asDate(paidDate), ctx.userId);
+    });
+    await this.audit.record(ctx, 'payable.pay', 'payable', id, { paidDate, accountId: accountId ?? null });
     return this.getPayable(ctx, id);
   }
 
   /** Cancelar uma conta em aberto, ou desfazer um pagamento lançado errado. */
   async setPayable(ctx: RequestContext, id: string, to: 'canceled' | 'open'): Promise<Payable> {
     const from = to === 'canceled' ? 'open' : { in: ['paid', 'canceled'] };
-    const done = await this.prisma.payable.updateMany({ where: { id, tenantId: ctx.tenantId, status: from }, data: { status: to, ...(to === 'open' ? { paidDate: null, note: null } : {}) } });
-    if (!done.count) throw await this.notOpen(ctx, id);
+    await this.prisma.$transaction(async (tx) => {
+      const done = await tx.payable.updateMany({ where: { id, tenantId: ctx.tenantId, status: from }, data: { status: to, ...(to === 'open' ? { paidDate: null, note: null, accountId: null } : {}) } });
+      if (!done.count) throw await this.notOpen(ctx, id);
+      await tx.accountEntry.deleteMany({ where: { payableId: id } });
+    });
     await this.audit.record(ctx, to === 'canceled' ? 'payable.cancel' : 'payable.reopen', 'payable', id);
+    return this.getPayable(ctx, id);
+  }
+
+  /** Corrige a conta do plano, o fornecedor, a competência ou o documento de uma conta já lançada. */
+  async classifyPayable(ctx: RequestContext, id: string, d: { chartAccountId?: string | null; supplierId?: string | null; competence?: string | null; document?: string | null }): Promise<Payable> {
+    const data: Prisma.PayableUncheckedUpdateManyInput = {};
+    if (d.chartAccountId) data.chartAccountId = (await this.ledger.postable(ctx.tenantId, d.chartAccountId)).id;
+    if (d.supplierId !== undefined) {
+      const f = d.supplierId ? await this.prisma.supplier.findFirst({ where: { id: d.supplierId, tenantId: ctx.tenantId }, select: { name: true } }) : null;
+      if (d.supplierId && !f) throw new DomainError('SUPPLIER_NOT_FOUND', 'Fornecedor não encontrado.');
+      Object.assign(data, { supplierId: d.supplierId, ...(f ? { supplier: f.name } : {}) });
+    }
+    if (d.competence) data.competence = asDate(d.competence);
+    if (d.document !== undefined) data.document = d.document;
+    const r = await this.prisma.payable.updateMany({ where: { id, tenantId: ctx.tenantId }, data });
+    if (!r.count) throw new NotFoundError('conta', id);
+    await this.audit.record(ctx, 'payable.classify', 'payable', id, d);
     return this.getPayable(ctx, id);
   }
 
   private async getPayable(ctx: RequestContext, id: string): Promise<Payable> {
     const r = await this.prisma.payable.findFirst({ where: { id, tenantId: ctx.tenantId } });
     if (!r) throw new NotFoundError('conta', id);
-    return toPayable(r, await this.storeNames(ctx));
+    return toPayable(r, await this.storeNames(ctx), await this.ledger.names(ctx.tenantId));
   }
 
   private async notOpen(ctx: RequestContext, id: string) {
@@ -200,7 +250,7 @@ export class FinanceService {
 
 const round = (v: number) => Math.round(v * 100) / 100;
 
-function toPayable(r: Prisma.PayableGetPayload<object>, stores: Map<string, string>): Payable {
+function toPayable(r: Prisma.PayableGetPayload<object>, stores: Map<string, string>, nomes?: { chart: Map<string, string>; accounts: Map<string, string> }): Payable {
   const due = day(r.dueDate);
   return {
     id: r.id,
@@ -215,5 +265,13 @@ function toPayable(r: Prisma.PayableGetPayload<object>, stores: Map<string, stri
     overdue: r.status === 'open' && due < todayBR(),
     paidDate: r.paidDate ? day(r.paidDate) : null,
     note: r.note,
+    chartAccountId: r.chartAccountId,
+    chartAccount: r.chartAccountId ? (nomes?.chart.get(r.chartAccountId) ?? null) : null,
+    supplierId: r.supplierId,
+    employeeId: r.employeeId,
+    competence: r.competence ? day(r.competence) : null,
+    accountId: r.accountId,
+    accountName: r.accountId ? (nomes?.accounts.get(r.accountId) ?? null) : null,
+    document: r.document,
   };
 }

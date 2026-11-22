@@ -16,8 +16,8 @@ export function CashflowScreen() {
   const [ate, setAte] = useState(addDays(hoje, 30));
   const [saldo, setSaldo] = useState(() => { try { return localStorage.getItem(SALDO) ?? ''; } catch { return ''; } });
   const [soMovimento, setSoMovimento] = useState(true);
-  const abertura = Number(saldo.replace(/\./g, '').replace(',', '.')) || 0;
-  const q = useQuery({ queryKey: ['fluxo', de, ate, abertura], queryFn: () => api<Cashflow>(`/reports/cashflow?from=${de}&to=${ate}&opening=${abertura}`) });
+  const abertura = saldo.trim() ? Number(saldo.replace(/\./g, '').replace(',', '.')) || 0 : null;
+  const q = useQuery({ queryKey: ['fluxo', de, ate, abertura], queryFn: () => api<Cashflow>(`/reports/cashflow?from=${de}&to=${ate}${abertura === null ? '' : `&opening=${abertura}`}`) });
   const d = q.data;
   const menor = d?.days.reduce((m, x) => (x.balance < m.balance ? x : m), d.days[0]!);
   const maior = Math.max(1, ...(d?.days.map((x) => Math.max(x.inDone + x.inExpected, x.outDone + x.outExpected)) ?? [1]));
@@ -27,8 +27,8 @@ export function CashflowScreen() {
       <div className="flex flex-wrap items-end gap-2">
         <Field label="De"><input className="input w-40" type="date" value={de} onChange={(e) => e.target.value && setDe(e.target.value)} /></Field>
         <Field label="Até"><input className="input w-40" type="date" value={ate} onChange={(e) => e.target.value && setAte(e.target.value)} /></Field>
-        <Field label="Saldo no início (opcional)" hint="Quanto tinha na conta e no caixa no primeiro dia.">
-          <input className="input w-40" inputMode="decimal" placeholder="0,00" value={saldo} onChange={(e) => { setSaldo(e.target.value); try { localStorage.setItem(SALDO, e.target.value); } catch { /* sem armazenamento */ } }} />
+        <Field label="Saldo no início" hint={d?.openingFromAccounts ? `Usando o saldo das contas cadastradas (${formatMoney(d.opening)}). Digite para trocar.` : 'Vazio = saldo das contas em Contas e bancos.'}>
+          <input className="input w-40" inputMode="decimal" placeholder="das contas" value={saldo} onChange={(e) => { setSaldo(e.target.value); try { localStorage.setItem(SALDO, e.target.value); } catch { /* sem armazenamento */ } }} />
         </Field>
         <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={soMovimento} onChange={(e) => setSoMovimento(e.target.checked)} /> Só dias com movimento</label>
       </div>

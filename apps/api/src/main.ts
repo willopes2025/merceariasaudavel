@@ -24,6 +24,14 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('v1');
   app.enableCors({ origin: true, credentials: true });
+  // Cabeçalhos básicos de segurança (o login usa token no cabeçalho, não cookie).
+  app.use((_req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(self)');
+    next();
+  });
 
   const swagger = new DocumentBuilder()
     .setTitle('Mercearia API')

@@ -18,6 +18,7 @@ import { AuditService } from '../../common/audit.service';
 import { ConflictError, NotFoundError } from '../../common/errors/domain-error';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestContext } from '../../common/tenancy/request-context';
+import { LedgerService } from './ledger.service';
 
 const asDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
@@ -34,10 +35,12 @@ export class ReceivablesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly ledger: LedgerService,
   ) {}
 
   /** Cria os recebíveis que faltam, cancela os pares venda/estorno que nem chegaram a cair e dá baixa no que já caiu. */
   async sync(tenantId: string) {
+    await this.ledger.ensure(tenantId);
     const hoje = asDate(todayBR());
     await this.prisma.$executeRaw`
       INSERT INTO receivable (id, tenant_id, store_id, movement_id, sale_id, method_id, kind, description, gross, fee, net, sale_date, due_date, status, received_date, received_amount)
@@ -72,6 +75,7 @@ export class ReceivablesService {
       UPDATE receivable r SET status = 'recebido', received_date = r.due_date, received_amount = r.net
         FROM payment_method pm
        WHERE r.method_id = pm.id AND r.tenant_id = ${tenantId} AND r.status = 'aberto' AND NOT pm.reconcile AND r.due_date <= ${hoje}`;
+    await this.ledger.syncReceivables(tenantId);
   }
 
   async summary(ctx: RequestContext): Promise<ReceivablesSummary> {
@@ -145,12 +149,14 @@ export class ReceivablesService {
     const rows = await this.prisma.receivable.findMany({ where: { tenantId: ctx.tenantId, id: { in: d.ids } } });
     if (rows.length !== new Set(d.ids).size) throw new NotFoundError('RECEIVABLE_NOT_FOUND', 'Algum recebível não foi encontrado.');
     if (rows.some((r) => r.status !== 'aberto')) throw new ConflictError('RECEIVABLE_NOT_OPEN', 'Algum item já foi recebido ou cancelado.');
+    if (d.accountId) await this.ledger.account(ctx.tenantId, d.accountId);
     if (d.amount !== undefined && rows.length > 1) throw new ConflictError('AMOUNT_SINGLE', 'Valor diferente só dá para informar recebendo um item por vez.');
     await this.prisma.$transaction(
       rows.map((r) =>
-        this.prisma.receivable.update({ where: { id: r.id }, data: { status: 'recebido', receivedDate: asDate(d.receivedDate), receivedAmount: d.amount ?? r.net, ...(d.note ? { note: d.note } : {}) } }),
+        this.prisma.receivable.update({ where: { id: r.id }, data: { status: 'recebido', receivedDate: asDate(d.receivedDate), receivedAmount: d.amount ?? r.net, ...(d.accountId ? { accountId: d.accountId } : {}), ...(d.note ? { note: d.note } : {}) } }),
       ),
     );
+    await this.ledger.syncReceivables(ctx.tenantId);
     await this.audit.record(ctx, 'receivable.settle', 'receivable', rows.length === 1 ? rows[0]!.id : null, { quantidade: rows.length, data: d.receivedDate, valor: d.amount ?? null });
     return { ok: true, received: rows.length };
   }
@@ -162,13 +168,14 @@ export class ReceivablesService {
     const metodo = r.methodId ? await this.prisma.paymentMethod.findUnique({ where: { id: r.methodId }, select: { reconcile: true, settleDays: true } }) : null;
     if (metodo && (!metodo.reconcile || metodo.settleDays === 0) && r.dueDate <= asDate(todayBR())) throw new ConflictError('AUTO_SETTLED', 'Esta forma de pagamento dá baixa sozinha. Para conferir pelo extrato, ligue "Conferir extrato" em Taxas e prazos.');
     await this.prisma.receivable.update({ where: { id }, data: { status: 'aberto', receivedDate: null, receivedAmount: null } });
+    await this.ledger.syncReceivables(ctx.tenantId);
     await this.audit.record(ctx, 'receivable.reopen', 'receivable', id, {});
     return { ok: true };
   }
 
   async createManual(ctx: RequestContext, d: ReceivableManualInput) {
     const r = await this.prisma.receivable.create({
-      data: { tenantId: ctx.tenantId, kind: 'avulso', description: d.description, gross: d.amount, net: d.amount, saleDate: asDate(todayBR()), dueDate: asDate(d.dueDate), note: d.note ?? null },
+      data: { tenantId: ctx.tenantId, kind: 'avulso', description: d.description, gross: d.amount, net: d.amount, saleDate: asDate(todayBR()), dueDate: asDate(d.dueDate), note: d.note ?? null, chartAccountId: d.chartAccountId ? (await this.ledger.postable(ctx.tenantId, d.chartAccountId)).id : ((await this.ledger.byCode(ctx.tenantId, '1.3'))?.id ?? null) },
     });
     await this.audit.record(ctx, 'receivable.create', 'receivable', r.id, { valor: d.amount });
     return { id: r.id };
@@ -186,8 +193,9 @@ export class ReceivablesService {
   // ───────────── Taxas e prazos ─────────────
 
   async fees(ctx: RequestContext): Promise<PaymentMethodFees[]> {
+    await this.ledger.ensure(ctx.tenantId);
     const ms = await this.prisma.paymentMethod.findMany({ where: { tenantId: ctx.tenantId }, orderBy: [{ active: 'desc' }, { name: 'asc' }] });
-    return ms.map((m) => ({ id: m.id, name: m.name, kind: m.kind, active: m.active, feePct: num(m.feePct), feeFixed: num(m.feeFixed), settleDays: m.settleDays, reconcile: m.reconcile }));
+    return ms.map((m) => ({ id: m.id, name: m.name, kind: m.kind, active: m.active, feePct: num(m.feePct), feeFixed: num(m.feeFixed), settleDays: m.settleDays, reconcile: m.reconcile, accountId: m.accountId }));
   }
 
   /** Salva as taxas e recalcula o que ainda está a receber (o que já caiu não muda). */
@@ -195,9 +203,11 @@ export class ReceivablesService {
     const ids = d.methods.map((m) => m.id);
     const existentes = await this.prisma.paymentMethod.count({ where: { tenantId: ctx.tenantId, id: { in: ids } } });
     if (existentes !== ids.length) throw new NotFoundError('METHOD_NOT_FOUND', 'Forma de pagamento não encontrada.');
+    const contas = [...new Set(d.methods.map((m) => m.accountId).filter((x): x is string => !!x))];
+    if (contas.length && (await this.prisma.financialAccount.count({ where: { tenantId: ctx.tenantId, id: { in: contas } } })) !== contas.length) throw new NotFoundError('METHOD_ACCOUNT', 'Conta financeira não encontrada.');
     await this.prisma.$transaction(async (tx) => {
       for (const m of d.methods) {
-        await tx.paymentMethod.update({ where: { id: m.id }, data: { feePct: m.feePct, feeFixed: m.feeFixed, settleDays: m.settleDays, reconcile: m.reconcile } });
+        await tx.paymentMethod.update({ where: { id: m.id }, data: { feePct: m.feePct, feeFixed: m.feeFixed, settleDays: m.settleDays, reconcile: m.reconcile, ...(m.accountId !== undefined ? { accountId: m.accountId } : {}) } });
         await tx.$executeRaw`
           UPDATE receivable SET fee = f.fee, net = gross - f.fee, due_date = sale_date + ${m.settleDays}::int
             FROM (SELECT id AS rid, CASE WHEN gross > 0 THEN ROUND(gross * ${m.feePct}::numeric / 100 + ${m.feeFixed}::numeric, 2) ELSE 0 END AS fee FROM receivable WHERE method_id = ${m.id} AND status = 'aberto') f

@@ -32,6 +32,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
+import { HrModule } from './modules/hr/hr.module';
 
 /**
  * Mercearia Saudável — Fase 1 (loja física): acesso, clientes e clube,
@@ -69,6 +70,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     StorefrontModule,
     AssistantModule,
     WhatsappModule,
+    HrModule,
   ],
   controllers: [HealthController],
   providers: [

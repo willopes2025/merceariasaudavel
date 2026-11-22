@@ -80,6 +80,8 @@ model TenantSetting {
   whatsappConfig     Json?    @map("whatsapp_config")
   /// Financeiro: alíquota estimada de impostos sobre vendas (DRE por competência).
   financeConfig      Json?    @map("finance_config")
+  /// Ponto: exigir foto, cerca por GPS (avisar | bloquear | desligada).
+  hrConfig           Json?    @map("hr_config")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -452,6 +454,8 @@ model PaymentMethod {
   settleDays Int     @default(0) @map("settle_days")
   /// Exige conferir o extrato para dar baixa (senão, baixa sozinho no dia previsto).
   reconcile  Boolean @default(false)
+  /// Conta financeira onde o dinheiro desta forma cai.
+  accountId  String? @map("account_id")
 
   tenant    Tenant         @relation(fields: [tenantId], references: [id])
   movements CashMovement[]
@@ -671,6 +675,15 @@ model Payable {
   searchText  String    @default("") @map("search_text")
   createdById String    @map("created_by_id")
   createdAt   DateTime  @default(now()) @map("created_at")
+  /// Conta do plano de contas (a categoria antiga fica só como histórico).
+  chartAccountId String?   @map("chart_account_id")
+  supplierId     String?   @map("supplier_id")
+  employeeId     String?   @map("employee_id")
+  /// Mês a que a despesa pertence (DRE por competência). Padrão: o vencimento.
+  competence     DateTime? @db.Date
+  /// Conta financeira de onde saiu o pagamento.
+  accountId      String?   @map("account_id")
+  document       String?
 
   @@index([tenantId, status, dueDate])
   @@map("payable")
@@ -1479,8 +1492,219 @@ model Receivable {
   receivedAmount Decimal?  @map("received_amount") @db.Decimal(12, 2)
   note           String?
   createdAt      DateTime  @default(now()) @map("created_at")
+  chartAccountId String?   @map("chart_account_id")
+  accountId      String?   @map("account_id")
 
   @@index([tenantId, dueDate])
   @@index([tenantId, saleDate])
   @@map("receivable")
+}
+
+/// Plano de contas: onde cada lançamento entra no DRE. O grupo sai do código (5.1.2 fica dentro de 5.1 e de 5).
+model ChartAccount {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  code      String
+  name      String
+  /// receita | deducao | custo | despesa_venda | despesa_operacional | financeira_receita | financeira_despesa | imposto_lucro | fora
+  dreLine   String   @map("dre_line")
+  /// Só entra no DRE de caixa: na competência o valor já aparece por outro caminho (CMV das vendas, comissão calculada).
+  cashOnly  Boolean  @default(false) @map("cash_only")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, code])
+  @@map("chart_account")
+}
+
+/// Conta financeira: caixa da loja, conta bancária, carteira digital.
+model FinancialAccount {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  name           String
+  /// caixa | banco | carteira
+  kind           String   @default("banco")
+  bank           String?
+  agency         String?
+  number         String?
+  pixKey         String?  @map("pix_key")
+  openingBalance Decimal  @default(0) @map("opening_balance") @db.Decimal(14, 2)
+  /// O saldo conta os lançamentos a partir deste dia.
+  openingDate    DateTime @map("opening_date") @db.Date
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, name])
+  @@map("financial_account")
+}
+
+/// Lançamento no extrato de uma conta financeira.
+model AccountEntry {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  accountId    String   @map("account_id")
+  date         DateTime @db.Date
+  /// Positivo = entrou; negativo = saiu.
+  amount       Decimal  @db.Decimal(14, 2)
+  /// pagamento | recebimento | transferencia | ajuste
+  kind         String
+  description  String
+  payableId    String?  @unique @map("payable_id")
+  receivableId String?  @unique @map("receivable_id")
+  transferId   String?  @map("transfer_id")
+  userId       String?  @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, accountId, date])
+  @@map("account_entry")
+}
+
+model Employee {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  storeId    String?   @map("store_id")
+  userId     String?   @unique @map("user_id")
+  name       String
+  cpf        String?
+  role       String?
+  phone      String?
+  email      String?
+  birthDate  DateTime? @map("birth_date") @db.Date
+  admission  DateTime  @db.Date
+  dismissal  DateTime? @db.Date
+  /// clt | estagio | pj | autonomo | socio
+  contract   String    @default("clt")
+  salary     Decimal   @default(0) @db.Decimal(12, 2)
+  /// Dia do mês em que o salário é pago.
+  payDay     Int       @default(5) @map("pay_day")
+  pixKey     String?   @map("pix_key")
+  scheduleId String?   @map("schedule_id")
+  clocks     Boolean   @default(true)
+  /// PIN do ponto (hash), para bater no aparelho da loja.
+  pinHash    String?   @map("pin_hash")
+  notes      String?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, active, name])
+  @@map("employee")
+}
+
+/// Escala de trabalho: um turno por dia da semana (0 = domingo); null = folga.
+model WorkSchedule {
+  id             String  @id @default(uuid())
+  tenantId       String  @map("tenant_id")
+  name           String
+  days           Json
+  tolerancePunch Int     @default(5) @map("tolerance_punch")
+  toleranceDay   Int     @default(10) @map("tolerance_day")
+  active         Boolean @default(true)
+
+  @@unique([tenantId, name])
+  @@map("work_schedule")
+}
+
+/// Local onde o ponto pode ser batido (cerca pelo GPS).
+model ClockPlace {
+  id        String  @id @default(uuid())
+  tenantId  String  @map("tenant_id")
+  name      String
+  latitude  Float
+  longitude Float
+  radiusM   Int     @default(150) @map("radius_m")
+  active    Boolean @default(true)
+
+  @@map("clock_place")
+}
+
+/// Batida de ponto: hora do servidor, número sequencial e hash encadeado. Não muda depois de gravada.
+model ClockRecord {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  employeeId String   @map("employee_id")
+  nsr        Int
+  at         DateTime
+  hash       String
+  latitude   Float?
+  longitude  Float?
+  accuracyM  Int?     @map("accuracy_m")
+  placeId    String?  @map("place_id")
+  outside    Boolean?
+  photo      Bytes?
+  /// proprio (login da pessoa) | loja (aparelho da loja, com PIN)
+  source     String
+  ip         String?
+  device     String?
+  userId     String?  @map("user_id")
+
+  @@unique([tenantId, nsr])
+  @@index([employeeId, at])
+  @@map("clock_record")
+}
+
+/// Sequência e último hash das batidas da empresa.
+model ClockSequence {
+  tenantId String @id @map("tenant_id")
+  lastNsr  Int    @default(0) @map("last_nsr")
+  lastHash String @default("") @map("last_hash")
+
+  @@map("clock_sequence")
+}
+
+/// Ajuste do espelho: batida incluída ou desconsiderada, sempre com motivo.
+model ClockAdjustment {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  employeeId String    @map("employee_id")
+  /// inclusao | desconsiderar
+  type       String
+  recordId   String?   @map("record_id")
+  at         DateTime?
+  reason     String
+  userId     String    @map("user_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([employeeId])
+  @@map("clock_adjustment")
+}
+
+/// Atestado, férias, folga, falta…
+model ClockOccurrence {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  employeeId String   @map("employee_id")
+  type       String
+  from       DateTime @db.Date
+  to         DateTime @db.Date
+  note       String?
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([employeeId, from])
+  @@map("clock_occurrence")
+}
+
+/// Fechamento do mês: foto do espelho; o funcionário dá ciência.
+model ClockClosing {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  employeeId String    @map("employee_id")
+  month      String
+  snapshot   Json
+  closedAt   DateTime  @default(now()) @map("closed_at")
+  closedBy   String    @map("closed_by")
+  ackAt      DateTime? @map("ack_at")
+
+  @@unique([employeeId, month])
+  @@map("clock_closing")
+}
+
+model Holiday {
+  id       String   @id @default(uuid())
+  tenantId String   @map("tenant_id")
+  date     DateTime @db.Date
+  name     String
+
+  @@unique([tenantId, date])
+  @@map("holiday")
 }
