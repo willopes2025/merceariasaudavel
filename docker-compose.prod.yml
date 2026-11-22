@@ -57,6 +57,7 @@ services:
       IFOOD_STORE_ID: ${IFOOD_STORE_ID:-}
       BROADCAST_INTERVAL_MS: ${BROADCAST_INTERVAL_MS:-4000}
       AFD_INPI: ${AFD_INPI:-}
+      TRAFFIC_SECRET: ${TRAFFIC_SECRET:-}
       AFD_DEV_DOC: ${AFD_DEV_DOC:-}
       WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
       # Pagamento online (Mercado Pago). Sem a chave, fica desligado.

@@ -124,7 +124,7 @@ await check('comissão de vendedor: total vendido × percentual do cadastro de f
   if (rows[0].v > 0) {
     assert.equal(eu.total, Math.round(rows[0].v * 100) / 100);
     assert.equal(eu.pct, 2.5);
-    assert.equal(eu.commission, Math.round(eu.total * 2.5) / 100);
+    assert.equal(eu.commission, Math.round((Math.round(eu.total * 100) * 2.5) / 100) / 100);
   }
   await db.query(`UPDATE employee SET user_id = NULL, active = false WHERE id = $1`, [emp.id]);
 });
@@ -229,6 +229,29 @@ await check('AFD do ponto: leiaute da Portaria 671 (cabeçalho 302, marcação 1
   assert.deepEqual([linhas.at(-2).length, Number(linhas.at(-2).slice(54, 63)), linhas.at(-1).length], [64, rows[0].n, 100]);
   assert.ok(linhas.at(-1).startsWith('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S'));
   assert.equal((await fetch(`${BASE}/hr/clock/afd?from=x&to=y`, { headers: { authorization: `Bearer ${token}` } })).status, 422);
+});
+
+// ───────────── Fluxo de pessoas ─────────────
+await check('fluxo de pessoas: contagem digitada e da câmera, conversão só do balcão e só nas horas contadas', async () => {
+  const storeId = (await db.query(`SELECT s.id FROM store s JOIN tenant t ON t.id = s.tenant_id WHERE t.slug = $1 AND s.active ORDER BY s.created_at LIMIT 1`, [SLUG])).rows[0].id;
+  const dia = addDays(hoje, -200);
+  await db.query(`DELETE FROM foot_traffic WHERE store_id = $1 AND day IN ($2, $3)`, [storeId, dia, hoje]);
+  ok(await call('/traffic/manual', { ...T, method: 'PUT', body: { storeId, day: dia, hours: [{ hour: 10, entries: 40 }, { hour: 11, entries: 60 }] } }));
+  ok(await call('/traffic/manual', { ...T, method: 'PUT', body: { storeId, day: dia, hours: [{ hour: 11, entries: 10 }] } }));
+  assert.deepEqual(ok(await call(`/traffic/day?storeId=${storeId}&day=${dia}`, T)).map((h) => h.entries), [40, 10]);
+  const { rows } = await db.query(`SELECT COUNT(*)::int AS n FROM sale WHERE store_id = $1 AND status = 'completed' AND channel = 'loja' AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date = $2 AND EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo') IN (10, 11)`, [storeId, dia]);
+  const r = ok(await call(`/traffic/report?from=${dia}&to=${dia}`, T));
+  assert.deepEqual([r.totals.entries, r.totals.sales, r.peakHour, r.days.length], [50, rows[0].n, 10, 1]);
+  ok(await call('/traffic/manual', { ...T, method: 'PUT', body: { storeId, day: addDays(hoje, 1), hours: [{ hour: 10, entries: 1 }] } }), 422);
+  // Câmera: endereço com segredo, sem login.
+  assert.match(r.webhookUrl, new RegExp(`/v1/traffic/in/${SLUG}/`));
+  const url = r.webhookUrl.replace(/^https?:\/\/[^/]+\/v1/, BASE);
+  assert.equal((await fetch(url.replace(/[^/]+$/, 'segredo-errado'))).status, 403);
+  assert.equal((await fetch(url)).status, 200);
+  assert.equal((await fetch(`${url}?in=4&out=2`, { method: 'POST' })).status, 200);
+  const cam = (await db.query(`SELECT SUM(entries)::int AS e, SUM(exits)::int AS x, MAX(source) AS s FROM foot_traffic WHERE store_id = $1 AND day = $2`, [storeId, hoje])).rows[0];
+  assert.deepEqual([cam.e, cam.x, cam.s], [5, 2, 'camera']);
+  ok(await call(`/traffic/report?from=${hoje}&to=${hoje}`), 401);
 });
 
 await db.end();

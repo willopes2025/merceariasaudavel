@@ -301,6 +301,12 @@ Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `financ
 - Não faz: complementos do iFood como opções de montagem (vão como observação), cancelamento pela loja, cardápio.
 - Teste: `scripts/e2e-ifood.mjs`.
 
+## Câmeras: fluxo de pessoas e conversão
+- Contagem de quem entra na loja por hora, comparada com as vendas do balcão: conversão, ticket e horário de pico.
+- A contagem chega por um endereço com segredo (`TRAFFIC_SECRET`), que a câmera ou o gravador chama a cada pessoa
+  (GET ou POST, `?in=N&out=N&store=CODIGO`), ou é digitada na tela. O sistema só recebe números.
+- Não há integração própria com um modelo de câmera: vale para qualquer equipamento que consiga chamar um endereço.
+  **Ainda não foi testado com uma câmera de verdade.**
+
 ### O que ainda falta
-Assinatura digital do AFD (precisa de certificado ICP-Brasil) e o AEJ; Mercado Livre, Shopee, Amazon e 99Food; e
-Câmeras com IA.
+Assinatura digital do AFD (precisa de certificado ICP-Brasil) e o AEJ; Mercado Livre, Shopee, Amazon e 99Food.

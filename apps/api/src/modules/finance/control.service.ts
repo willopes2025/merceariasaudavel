@@ -195,6 +195,6 @@ export class ControlService {
        WHERE s.tenant_id = ${ctx.tenantId} AND s.status = 'completed' ${ctx.storeIds.length ? Prisma.sql`AND s.store_id IN (${Prisma.join(ctx.storeIds)})` : Prisma.empty}
          AND (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN ${asDate(from)} AND ${asDate(to)}
        GROUP BY u.id, u.name, e.id, e.name, e.commission_pct ORDER BY total DESC`;
-    return rows.map((r) => ({ userId: r.user_id, name: r.name, employeeId: r.employee_id, sales: Number(r.n), total: r2(num(r.total)), pct: num(r.pct), commission: r2((num(r.total) * num(r.pct)) / 100) }));
+    return rows.map((r) => ({ userId: r.user_id, name: r.name, employeeId: r.employee_id, sales: Number(r.n), total: r2(num(r.total)), pct: num(r.pct), commission: Math.round((Math.round(num(r.total) * 100) * num(r.pct)) / 100) / 100 }));
   }
 }

@@ -1803,3 +1803,21 @@ model IfoodOrder {
   @@index([tenantId, createdAt])
   @@map("ifood_order")
 }
+
+/// Pessoas que entraram na loja em cada hora (câmera ou digitado).
+model FootTraffic {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  storeId   String   @map("store_id")
+  day       DateTime @db.Date
+  hour      Int
+  entries   Int      @default(0)
+  exits     Int      @default(0)
+  /// camera | manual
+  source    String   @default("manual")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([storeId, day, hour])
+  @@index([tenantId, day])
+  @@map("foot_traffic")
+}

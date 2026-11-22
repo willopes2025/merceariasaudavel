@@ -35,6 +35,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { HrModule } from './modules/hr/hr.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { IfoodModule } from './modules/ifood/ifood.module';
+import { TrafficModule } from './modules/traffic/traffic.module';
 import { BroadcastModule } from './modules/broadcast/broadcast.module';
 
 /**
@@ -77,6 +78,7 @@ import { BroadcastModule } from './modules/broadcast/broadcast.module';
     AdminModule,
     BroadcastModule,
     IfoodModule,
+    TrafficModule,
   ],
   controllers: [HealthController],
   providers: [

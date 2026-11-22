@@ -224,3 +224,24 @@ export interface IfoodStatus {
   lastError: string | null;
   orders: IfoodOrderRow[];
 }
+
+// ───────────── Fluxo de pessoas (câmeras) ─────────────
+
+export const trafficManualSchema = z.object({
+  storeId: z.string().uuid(),
+  day: isoDate,
+  /** Pessoas que entraram em cada hora do dia (substitui o que havia nessas horas). */
+  hours: z.array(z.object({ hour: z.number().int().min(0).max(23), entries: z.coerce.number().int().min(0).max(100_000) })).min(1).max(24),
+});
+export type TrafficManualInput = z.infer<typeof trafficManualSchema>;
+
+export interface TrafficReport {
+  /** Endereço para a câmera (ou o gravador) chamar a cada pessoa contada. Vazio = entrada automática desligada. */
+  webhookUrl: string | null;
+  lastCameraAt: string | null;
+  totals: { entries: number; sales: number; conversion: number | null; revenue: number; ticket: number | null };
+  days: Array<{ day: string; entries: number; sales: number; conversion: number | null; revenue: number }>;
+  /** Média por hora do dia no período. */
+  hours: Array<{ hour: number; entries: number; sales: number; conversion: number | null }>;
+  peakHour: number | null;
+}

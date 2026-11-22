@@ -39,6 +39,8 @@ const MANUAL: Capitulo[] = [
       { titulo: 'Campanhas e cupons', texto: 'Oferta por produto ou categoria, cupom com limite de uso e cashback turbinado.', tela: ['/campanhas', 'Campanhas e cupons'], permissao: 'campaign.manage' },
       { titulo: 'WhatsApp com IA', texto: 'A IA responde as clientes, consulta preço e estoque e monta o carrinho. Quando não sabe, passa para a equipe.', tela: ['/whatsapp', 'WhatsApp com IA'], permissao: 'customer.view' },
       { titulo: 'Disparos', texto: 'Mensagem para um grupo de clientes, com o nome de cada uma. Depois mostra quanto voltou em venda.', tela: ['/disparos', 'Disparos e anúncios'], permissao: 'campaign.manage' },
+      { titulo: 'iFood', texto: 'Os pedidos entram sozinhos na tela de preparo e viram venda. O produto é reconhecido pelo código PDV do cardápio do iFood.', tela: ['/marketplaces', 'iFood e marketplaces'], permissao: 'order.prepare' },
+      { titulo: 'Fluxo de pessoas', texto: 'Quantas pessoas entraram, quantas compraram e os horários de pico, pela contagem das câmeras ou digitada.', tela: ['/cameras', 'Câmeras'], permissao: 'report.view' },
       { titulo: 'Parceiros', texto: 'Nutricionistas e personais indicam com um código: a cliente ganha desconto e o parceiro, comissão.', tela: ['/parceiros', 'Parceiros'], permissao: 'partner.manage' },
     ],
   },
