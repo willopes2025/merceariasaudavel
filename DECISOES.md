@@ -184,3 +184,12 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
   PIN guardado com hash e trava de 5 tentativas. Cálculo de jornada reaproveitado da Aritana (com os testes).
 - Varredura: RLS em `ai_usage` (única tabela com empresa sem isolamento), cabeçalhos de segurança, textos de ótica
   removidos e correção do formulário de contas a pagar (categoria padrão inválida).
+
+## Conciliação, orçamento e disparos
+- Conciliação não cria um segundo livro: cada linha do banco aponta para um lançamento do extrato do sistema. Lançar
+  pela conciliação cria a conta a pagar (já paga) ou o recebimento avulso de verdade, para o DRE continuar certo.
+- A chave da linha do extrato junta o FITID do banco com dia, valor e texto (há banco que repete ou omite o FITID).
+- Orçamento é por linha do DRE (`acc_<id>` para conta do plano, ou a chave da linha calculada, como `cmv`), assim dá
+  para orçar também o que vem das vendas.
+- Disparo congela a lista na hora do envio e confere de novo, pessoa a pessoa, se ela ainda aceita mensagens.
+- Correção: a recompra contava como dia seguinte toda venda feita depois das 18h (fuso aplicado duas vezes).

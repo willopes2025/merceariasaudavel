@@ -179,6 +179,7 @@ model AuditLog {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, entity, entityId])
+  @@index([tenantId, createdAt])
   @@map("audit_log")
 }
 
@@ -1578,6 +1579,8 @@ model Employee {
   /// Dia do mês em que o salário é pago.
   payDay     Int       @default(5) @map("pay_day")
   pixKey     String?   @map("pix_key")
+  /// Comissão sobre as vendas que a pessoa fez no caixa (%).
+  commissionPct Decimal @default(0) @map("commission_pct") @db.Decimal(5, 2)
   scheduleId String?   @map("schedule_id")
   clocks     Boolean   @default(true)
   /// PIN do ponto (hash), para bater no aparelho da loja.
@@ -1707,4 +1710,72 @@ model Holiday {
 
   @@unique([tenantId, date])
   @@map("holiday")
+}
+
+/// Linha do extrato do banco (arquivo OFX), para conferir com o extrato do sistema.
+model BankLine {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  accountId String   @map("account_id")
+  date      DateTime @db.Date
+  amount    Decimal  @db.Decimal(14, 2)
+  memo      String   @default("")
+  fitid     String
+  /// pendente | conciliado | ignorado
+  status    String   @default("pendente")
+  entryId   String?  @map("entry_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([accountId, fitid])
+  @@index([tenantId, accountId, date])
+  @@map("bank_line")
+}
+
+/// Orçamento: quanto se espera em cada linha do DRE em cada mês (acc_<id> = conta do plano).
+model Budget {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  month          DateTime @db.Date
+  lineKey        String   @map("line_key")
+  amount         Decimal  @db.Decimal(14, 2)
+
+  @@unique([tenantId, month, lineKey])
+  @@map("budget")
+}
+
+/// Disparo de WhatsApp para um grupo de clientes.
+model Broadcast {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  name        String
+  message     String
+  segment     Json
+  /// rascunho | enviando | concluido | cancelado
+  status      String    @default("rascunho")
+  total       Int       @default(0)
+  sent        Int       @default(0)
+  failed      Int       @default(0)
+  createdById String?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  @@index([tenantId, createdAt])
+  @@map("broadcast")
+}
+
+model BroadcastRecipient {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  broadcastId String    @map("broadcast_id")
+  customerId  String?   @map("customer_id")
+  name        String
+  phone       String
+  /// pendente | enviado | falhou
+  status      String    @default("pendente")
+  error       String?
+  sentAt      DateTime? @map("sent_at")
+
+  @@unique([broadcastId, phone])
+  @@map("broadcast_recipient")
 }

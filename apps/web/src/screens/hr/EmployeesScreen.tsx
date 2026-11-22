@@ -7,8 +7,8 @@ import { formatDay } from '../../components/format';
 
 const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 type Aba = 'pessoas' | 'escalas' | 'ponto';
-type Form = { id: string | null; name: string; cpf: string; role: string; phone: string; email: string; birthDate: string; admission: string; dismissal: string; contract: ContractType; salary: string; payDay: string; pixKey: string; storeId: string; userId: string; scheduleId: string; clocks: boolean; pin: string; notes: string; active: boolean; hasPin: boolean };
-const vazio: Form = { id: null, name: '', cpf: '', role: '', phone: '', email: '', birthDate: '', admission: todayBR(), dismissal: '', contract: 'clt', salary: '', payDay: '5', pixKey: '', storeId: '', userId: '', scheduleId: '', clocks: true, pin: '', notes: '', active: true, hasPin: false };
+type Form = { id: string | null; name: string; cpf: string; role: string; phone: string; email: string; birthDate: string; admission: string; dismissal: string; contract: ContractType; salary: string; payDay: string; pixKey: string; commissionPct: string; storeId: string; userId: string; scheduleId: string; clocks: boolean; pin: string; notes: string; active: boolean; hasPin: boolean };
+const vazio: Form = { id: null, name: '', cpf: '', role: '', phone: '', email: '', birthDate: '', admission: todayBR(), dismissal: '', contract: 'clt', salary: '', payDay: '5', pixKey: '', commissionPct: '', storeId: '', userId: '', scheduleId: '', clocks: true, pin: '', notes: '', active: true, hasPin: false };
 
 /** Funcionários: cadastro, escalas de trabalho e as regras do ponto. */
 export function EmployeesScreen() {
@@ -32,7 +32,7 @@ function Pessoas() {
   const [form, setForm] = useState<Form | null>(null);
   const [inativos, setInativos] = useState(false);
   const lista = (q.data ?? []).filter((e) => inativos || e.active);
-  const editar = (e: Employee) => setForm({ id: e.id, name: e.name, cpf: e.cpf ?? '', role: e.role ?? '', phone: e.phone ?? '', email: e.email ?? '', birthDate: e.birthDate ?? '', admission: e.admission, dismissal: e.dismissal ?? '', contract: e.contract, salary: e.salary ? String(e.salary).replace('.', ',') : '', payDay: String(e.payDay), pixKey: e.pixKey ?? '', storeId: e.storeId ?? '', userId: e.userId ?? '', scheduleId: e.scheduleId ?? '', clocks: e.clocks, pin: '', notes: e.notes ?? '', active: e.active, hasPin: e.hasPin });
+  const editar = (e: Employee) => setForm({ id: e.id, name: e.name, cpf: e.cpf ?? '', role: e.role ?? '', phone: e.phone ?? '', email: e.email ?? '', birthDate: e.birthDate ?? '', admission: e.admission, dismissal: e.dismissal ?? '', contract: e.contract, salary: e.salary ? String(e.salary).replace('.', ',') : '', payDay: String(e.payDay), pixKey: e.pixKey ?? '', commissionPct: e.commissionPct ? String(e.commissionPct).replace('.', ',') : '', storeId: e.storeId ?? '', userId: e.userId ?? '', scheduleId: e.scheduleId ?? '', clocks: e.clocks, pin: '', notes: e.notes ?? '', active: e.active, hasPin: e.hasPin });
   return (
     <>
       <div className="flex items-center gap-3">
@@ -75,7 +75,7 @@ function EditarPessoa({ form, onClose, onDone }: { form: Form; onClose: () => vo
   const users = useQuery({ queryKey: ['users', 'rh'], queryFn: () => api<Array<{ id: string; name: string; active: boolean }>>('/users'), enabled: can('user.manage') });
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const salvar = useMutation({
-    mutationFn: () => api(f.id ? `/hr/employees/${f.id}` : '/hr/employees', { method: f.id ? 'PUT' : 'POST', json: { name: f.name, cpf: f.cpf || null, role: f.role || null, phone: f.phone || null, email: f.email || null, birthDate: f.birthDate || null, admission: f.admission, dismissal: f.dismissal || null, contract: f.contract, salary: f.salary || '0', payDay: f.payDay, pixKey: f.pixKey || null, storeId: f.storeId || null, userId: f.userId || null, scheduleId: f.scheduleId || null, clocks: f.clocks, pin: f.pin || null, notes: f.notes || null, active: f.active } }),
+    mutationFn: () => api(f.id ? `/hr/employees/${f.id}` : '/hr/employees', { method: f.id ? 'PUT' : 'POST', json: { name: f.name, cpf: f.cpf || null, role: f.role || null, phone: f.phone || null, email: f.email || null, birthDate: f.birthDate || null, admission: f.admission, dismissal: f.dismissal || null, contract: f.contract, salary: f.salary || '0', payDay: f.payDay, pixKey: f.pixKey || null, commissionPct: f.commissionPct || '0', storeId: f.storeId || null, userId: f.userId || null, scheduleId: f.scheduleId || null, clocks: f.clocks, pin: f.pin || null, notes: f.notes || null, active: f.active } }),
     onSuccess: onDone,
   });
   return (
@@ -95,6 +95,7 @@ function EditarPessoa({ form, onClose, onDone }: { form: Form; onClose: () => vo
           <Field label="Salário (R$)"><input className="input tabular-nums" inputMode="decimal" value={f.salary} onChange={set('salary')} placeholder="0,00" /></Field>
           <Field label="Dia do pagamento"><input className="input w-24" type="number" min={1} max={31} value={f.payDay} onChange={set('payDay')} /></Field>
           <Field label="Chave Pix"><input className="input" value={f.pixKey} onChange={set('pixKey')} /></Field>
+          <Field label="Comissão sobre vendas (%)"><input className="input" inputMode="decimal" value={f.commissionPct} onChange={set('commissionPct')} placeholder="0" /></Field>
           <Field label="Escala de trabalho"><select className="input" value={f.scheduleId} onChange={set('scheduleId')}><option value="">Sem escala</option>{escalas.data?.filter((e) => e.active).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
         </div>
         <div className="space-y-3 rounded-lg bg-cream p-3">

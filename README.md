@@ -264,7 +264,22 @@ Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `financ
   Ainda não tem: arquivos AFD/AEJ da Portaria 671 com assinatura digital e envio para a contabilidade.
 - Teste: `scripts/e2e-gestao.mjs`.
 
-### O que os outros sistemas têm e este ainda não
-Conciliação bancária por extrato (OFX) e orçamento por conta (Soul ERP); arquivos legais do ponto, documentos do
-funcionário e envio à contabilidade (Aritana); importação de planilhas, tela de auditoria, comissão de vendedores,
-central de avisos e manual dentro do sistema (Aritana e Soul ERP).
+## Controle: conciliação, orçamento, comissões, importação, auditoria e disparos
+- **Conciliação bancária** (`/conciliacao`): sobe o extrato do banco em OFX, o sistema casa sozinho o que tem o mesmo
+  valor e data até 3 dias de distância; o resto resolve linha a linha (casar com um lançamento, dar baixa numa conta
+  a pagar em aberto, lançar como despesa/receita numa conta do plano, ajustar o saldo ou ignorar). Mostra também o
+  que está no sistema e não apareceu no banco. Subir o mesmo arquivo de novo não duplica.
+- **Orçamento** (`/orcamento`): valor esperado por linha do DRE em cada mês, comparado com o realizado (competência).
+- **Comissões da equipe** (`/comissoes`): vendas de cada pessoa no caixa × percentual do cadastro de funcionário.
+- **Importar planilha** (`/configuracoes/importar`): produtos e clientes por CSV, com conferência antes de gravar.
+- **Auditoria** (`/configuracoes/auditoria`): quem fez o quê e quando, com filtros.
+- **Disparos e anúncios** (`/disparos`): mensagem de WhatsApp para um grupo (membros, sumidos, aniversariantes, com
+  cashback, por categoria comprada), com `{nome}` e `{cashback}`, envio espaçado (`BROADCAST_INTERVAL_MS`, padrão
+  4000), limite de 2.000 pessoas, parada automática com 8 falhas seguidas e retomada se o servidor reiniciar.
+  Mostra as vendas de quem recebeu nos 7 dias seguintes. A aba de anúncios soma cadastros e pedidos por UTM.
+- Teste: `scripts/e2e-controle.mjs`.
+
+### O que ainda falta
+Arquivos legais do ponto (AFD/AEJ da Portaria 671 com assinatura digital) e envio à contabilidade; central de avisos
+e manual dentro do sistema; e as duas telas que dependem de contrato e credencial de terceiros: Marketplaces e
+iFood, e Câmeras com IA.

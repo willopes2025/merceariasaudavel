@@ -71,7 +71,7 @@ export const NAV: NavGroup[] = [
       { label: 'Campanhas e cupons', path: '/campanhas', phase: 0, permission: 'campaign.manage' },
       { label: 'Parceiros (nutris e personais)', path: '/parceiros', phase: 0, permission: 'partner.manage' },
       { label: 'Kits', path: '/kits', phase: 0, permission: 'partner.manage' },
-      { label: 'Disparos e anúncios', path: '/disparos', phase: 3, description: 'Disparo segmentado pelo WhatsApp e rastreio de vendas vindas do Meta Ads e do Google Ads.' },
+      { label: 'Disparos e anúncios', path: '/disparos', phase: 0, permission: 'campaign.manage' },
     ],
   },
   {
@@ -83,6 +83,8 @@ export const NAV: NavGroup[] = [
       { label: 'Contas a receber', path: '/receber', phase: 0, permission: 'finance.view' },
       { label: 'Contas a pagar', path: '/pagar', phase: 0, permission: 'finance.view' },
       { label: 'Contas e bancos', path: '/contas', phase: 0, permission: 'finance.view' },
+      { label: 'Conciliação bancária', path: '/conciliacao', phase: 0, permission: 'finance.view' },
+      { label: 'Orçamento', path: '/orcamento', phase: 0, permission: 'finance.view' },
       { label: 'Plano de contas', path: '/plano-de-contas', phase: 0, permission: 'finance.view' },
       { label: 'Notas fiscais', path: '/fiscal', phase: 0, permission: 'fiscal.view' },
     ],
@@ -94,6 +96,7 @@ export const NAV: NavGroup[] = [
       { label: 'Bater ponto', path: '/bater-ponto', phase: 0 },
       { label: 'Ponto', path: '/ponto', phase: 0, permission: 'hr.manage' },
       { label: 'Funcionários', path: '/funcionarios', phase: 0, permission: 'hr.manage' },
+      { label: 'Comissões', path: '/comissoes', phase: 0, permission: 'finance.view' },
     ],
   },
   {
@@ -107,6 +110,8 @@ export const NAV: NavGroup[] = [
       { label: 'Telas de TV', path: '/configuracoes/tv', phase: 0, permission: 'goal.manage' },
       { label: 'Entrega', path: '/configuracoes/entrega', phase: 0, permission: 'settings.manage' },
       { label: 'Nota fiscal', path: '/configuracoes/fiscal', phase: 0, permission: 'settings.manage' },
+      { label: 'Importar planilha', path: '/configuracoes/importar', phase: 0, permission: 'settings.manage' },
+      { label: 'Auditoria', path: '/configuracoes/auditoria', phase: 0, permission: 'user.manage' },
     ],
   },
 ];

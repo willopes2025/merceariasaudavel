@@ -76,6 +76,12 @@ const DreScreen = screen(() => import('./screens/finance/DreScreen'), (m) => m.D
 const CashflowScreen = screen(() => import('./screens/finance/CashflowScreen'), (m) => m.CashflowScreen);
 const ChartScreen = screen(() => import('./screens/finance/ChartScreen'), (m) => m.ChartScreen);
 const AccountsScreen = screen(() => import('./screens/finance/AccountsScreen'), (m) => m.AccountsScreen);
+const ReconcileScreen = screen(() => import('./screens/finance/ReconcileScreen'), (m) => m.ReconcileScreen);
+const BudgetScreen = screen(() => import('./screens/finance/BudgetScreen'), (m) => m.BudgetScreen);
+const CommissionScreen = screen(() => import('./screens/hr/CommissionScreen'), (m) => m.CommissionScreen);
+const AuditScreen = screen(() => import('./screens/admin/AuditScreen'), (m) => m.AuditScreen);
+const ImportScreen = screen(() => import('./screens/admin/ImportScreen'), (m) => m.ImportScreen);
+const BroadcastScreen = screen(() => import('./screens/broadcast/BroadcastScreen'), (m) => m.BroadcastScreen);
 const EmployeesScreen = screen(() => import('./screens/hr/EmployeesScreen'), (m) => m.EmployeesScreen);
 const ClockScreen = screen(() => import('./screens/hr/ClockScreen'), (m) => m.ClockScreen);
 const PunchScreen = screen(() => import('./screens/hr/ClockScreen'), (m) => m.PunchScreen);
@@ -199,6 +205,12 @@ export function App() {
             <Route path="receber" element={<ReceivablesScreen />} />
             <Route path="plano-de-contas" element={<ChartScreen />} />
             <Route path="contas" element={<AccountsScreen />} />
+            <Route path="conciliacao" element={<ReconcileScreen />} />
+            <Route path="orcamento" element={<BudgetScreen />} />
+            <Route path="comissoes" element={<CommissionScreen />} />
+            <Route path="disparos" element={<BroadcastScreen />} />
+            <Route path="configuracoes/auditoria" element={<AuditScreen />} />
+            <Route path="configuracoes/importar" element={<ImportScreen />} />
             <Route path="funcionarios" element={<EmployeesScreen />} />
             <Route path="ponto" element={<ClockScreen />} />
             <Route path="bater-ponto" element={<PunchScreen />} />

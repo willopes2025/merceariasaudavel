@@ -54,6 +54,8 @@ export const employeeSchema = z.object({
   salary: dinheiro.default(0),
   payDay: z.coerce.number().int().min(1).max(31).default(5),
   pixKey: z.string().trim().max(120).nullish(),
+  /** Comissão sobre as vendas feitas no caixa (%). */
+  commissionPct: z.preprocess((v) => (typeof v === 'string' ? Number(v.replace(',', '.') || 0) : v), z.number().min(0).max(100)).default(0),
   storeId: z.string().uuid().nullish(),
   userId: z.string().uuid().nullish(),
   scheduleId: z.string().uuid().nullish(),

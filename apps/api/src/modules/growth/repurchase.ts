@@ -26,7 +26,7 @@ export async function computeRepurchase(db: Db, tenantId: string, opts: { custom
   const customerFilter = opts.customerId ? Prisma.sql`AND s.customer_id = ${opts.customerId}` : Prisma.empty;
   const rows = await db.$queryRaw<Array<{ customer_id: string; product_id: string; days: string[] }>>`
     SELECT customer_id, product_id, array_agg(d ORDER BY d) AS days FROM (
-      SELECT DISTINCT s.customer_id, si.product_id, to_char((s.created_at AT TIME ZONE 'America/Sao_Paulo')::date, 'YYYY-MM-DD') AS d
+      SELECT DISTINCT s.customer_id, si.product_id, to_char((s.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date, 'YYYY-MM-DD') AS d
         FROM sale_item si JOIN sale s ON s.id = si.sale_id
        WHERE s.tenant_id = ${tenantId} AND s.status = 'completed' AND s.customer_id IS NOT NULL
          AND si.kind = 'revenda' AND s.created_at >= now() - interval '400 days' ${customerFilter}

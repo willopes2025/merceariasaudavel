@@ -237,6 +237,7 @@ export * from './kitchen';
 export * from './hr';
 export * from './goals';
 export * from './finance';
+export * from './extras';
 export * from './fiscal';
 export * from './stock-entry';
 
