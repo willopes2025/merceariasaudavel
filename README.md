@@ -288,6 +288,19 @@ Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `financ
   com CRC-16/KERMIT, marcações tipo 7 com SHA-256 encadeado, trailer e linha de assinatura). Sai sem assinatura
   digital (.p7s) e sem registro no INPI: `AFD_INPI` e `AFD_DEV_DOC` no `.env` preenchem esses campos quando houver.
 
+## iFood
+- A cada 30 s o servidor busca os eventos do iFood (Merchant API): pedido novo é aceito, vira pedido na tela de
+  preparo (canal iFood) e venda no canal iFood com a forma de pagamento "iFood" (taxa e prazo em Taxas e prazos).
+  Andar o pedido na tela de preparo avisa o iFood (em preparo, pronto, despachado). Cancelado no iFood cancela aqui.
+- O produto é reconhecido pelo "código PDV" do item no cardápio do iFood = código ou código de barras do produto.
+  Item sem código deixa o pedido "sem cadastro" na tela `/marketplaces`, com "Tentar de novo" depois de corrigir.
+- Caixa fechado: o pedido espera e a venda entra sozinha quando o caixa abrir.
+- `.env`: `IFOOD_CLIENT_ID`, `IFOOD_CLIENT_SECRET`, `IFOOD_MERCHANT_ID` (e `IFOOD_STORE_ID` com mais de uma loja).
+  `IFOOD_PROVIDER=teste` liga o simulador. **Ainda não foi testado contra o iFood de verdade** (não há chaves) e o
+  iFood exige homologação do aplicativo antes de liberar em produção.
+- Não faz: complementos do iFood como opções de montagem (vão como observação), cancelamento pela loja, cardápio.
+- Teste: `scripts/e2e-ifood.mjs`.
+
 ### O que ainda falta
-Assinatura digital do AFD (precisa de certificado ICP-Brasil) e o AEJ; e as duas telas que dependem de contrato e
-credencial de terceiros: Marketplaces e iFood, e Câmeras com IA.
+Assinatura digital do AFD (precisa de certificado ICP-Brasil) e o AEJ; Mercado Livre, Shopee, Amazon e 99Food; e
+Câmeras com IA.

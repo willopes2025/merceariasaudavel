@@ -82,6 +82,7 @@ const CommissionScreen = screen(() => import('./screens/hr/CommissionScreen'), (
 const AuditScreen = screen(() => import('./screens/admin/AuditScreen'), (m) => m.AuditScreen);
 const ImportScreen = screen(() => import('./screens/admin/ImportScreen'), (m) => m.ImportScreen);
 const BroadcastScreen = screen(() => import('./screens/broadcast/BroadcastScreen'), (m) => m.BroadcastScreen);
+const IfoodScreen = screen(() => import('./screens/ifood/IfoodScreen'), (m) => m.IfoodScreen);
 const HelpScreen = screen(() => import('./screens/help/HelpScreen'), (m) => m.HelpScreen);
 const EmployeesScreen = screen(() => import('./screens/hr/EmployeesScreen'), (m) => m.EmployeesScreen);
 const ClockScreen = screen(() => import('./screens/hr/ClockScreen'), (m) => m.ClockScreen);
@@ -213,6 +214,7 @@ export function App() {
             <Route path="configuracoes/auditoria" element={<AuditScreen />} />
             <Route path="configuracoes/importar" element={<ImportScreen />} />
             <Route path="ajuda" element={<HelpScreen />} />
+            <Route path="marketplaces" element={<IfoodScreen />} />
             <Route path="funcionarios" element={<EmployeesScreen />} />
             <Route path="ponto" element={<ClockScreen />} />
             <Route path="bater-ponto" element={<PunchScreen />} />

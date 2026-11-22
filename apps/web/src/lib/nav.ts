@@ -42,7 +42,7 @@ export const NAV: NavGroup[] = [
       { label: 'App e cardápio', path: '/app-cardapio', phase: 0, permission: 'customer.view' },
       { label: 'Pagamento no app e no totem', path: '/pagamento-online', phase: 0, permission: 'settings.manage' },
       { label: 'Loja online', path: '/loja-online', phase: 0, permission: 'report.view' },
-      { label: 'Marketplaces e iFood', path: '/marketplaces', phase: 2, description: 'Mercado Livre, Shopee, Amazon, iFood e 99Food com estoque e preço sincronizados e os pedidos caindo na mesma central.' },
+      { label: 'iFood e marketplaces', path: '/marketplaces', phase: 0, permission: 'order.prepare' },
     ],
   },
   {

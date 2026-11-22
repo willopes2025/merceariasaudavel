@@ -81,6 +81,12 @@ export class AlertsService {
         if (q) out.push({ key: 'pedidos-parados', level: 'urgente', title: `${s(q, 'pedido parado há mais de 30 minutos', 'pedidos parados há mais de 30 minutos')}`, detail: 'Estão na fila ou em preparo.', path: '/preparo' });
       });
     }
+    if (pode(PERMISSIONS.orderPrepare)) {
+      add(async () => {
+        const q = await this.prisma.ifoodOrder.count({ where: { tenantId: t, problem: { not: null }, status: { in: ['sem_cadastro', 'importado', 'cancelado'] }, createdAt: { gte: new Date(Date.now() - 24 * 3_600_000) } } });
+        if (q) out.push({ key: 'ifood', level: 'urgente', title: `${s(q, 'pedido do iFood precisa de ajuste', 'pedidos do iFood precisam de ajuste')}`, detail: 'Produto sem código, venda não registrada ou cancelamento para conferir.', path: '/marketplaces' });
+      });
+    }
     if (pode(PERMISSIONS.hrManage)) {
       add(async () => {
         const mes = addDays(`${hoje.slice(0, 7)}-01`, -1).slice(0, 7);

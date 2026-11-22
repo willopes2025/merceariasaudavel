@@ -195,3 +195,32 @@ export interface Alert {
   /** Tela onde se resolve. */
   path: string;
 }
+
+// ───────────── iFood ─────────────
+
+export interface IfoodOrderRow {
+  id: string;
+  displayId: string;
+  status: 'importado' | 'sem_cadastro' | 'cancelado' | 'concluido';
+  customerName: string;
+  createdAt: string;
+  /** Quanto a cliente pagou no iFood. */
+  total: number;
+  /** Total da venda registrada aqui (pelos preços do sistema). */
+  localTotal: number | null;
+  items: Array<{ name: string; quantity: number; code: string | null; matched: boolean }>;
+  delivery: string;
+  /** Andamento do pedido na tela de preparo. */
+  orderStatus: string | null;
+  orderNumber: number | null;
+  saleNumber: number | null;
+  problem: string | null;
+}
+export interface IfoodStatus {
+  /** off = sem chaves no servidor; teste = simulador. */
+  provider: 'off' | 'ifood' | 'teste';
+  storeName: string | null;
+  lastPollAt: string | null;
+  lastError: string | null;
+  orders: IfoodOrderRow[];
+}

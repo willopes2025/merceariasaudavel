@@ -50,6 +50,14 @@ services:
       META_WA_PHONE_ID: ${META_WA_PHONE_ID:-}
       META_WA_APP_SECRET: ${META_WA_APP_SECRET:-}
       META_WA_VERIFY_TOKEN: ${META_WA_VERIFY_TOKEN:-}
+      # iFood (pedidos), disparos de WhatsApp e arquivo AFD do ponto.
+      IFOOD_CLIENT_ID: ${IFOOD_CLIENT_ID:-}
+      IFOOD_CLIENT_SECRET: ${IFOOD_CLIENT_SECRET:-}
+      IFOOD_MERCHANT_ID: ${IFOOD_MERCHANT_ID:-}
+      IFOOD_STORE_ID: ${IFOOD_STORE_ID:-}
+      BROADCAST_INTERVAL_MS: ${BROADCAST_INTERVAL_MS:-4000}
+      AFD_INPI: ${AFD_INPI:-}
+      AFD_DEV_DOC: ${AFD_DEV_DOC:-}
       WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
       # Pagamento online (Mercado Pago). Sem a chave, fica desligado.
       PUBLIC_URL: ${PUBLIC_URL:-https://mercearia.wideic.com}

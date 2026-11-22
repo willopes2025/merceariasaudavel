@@ -1779,3 +1779,27 @@ model BroadcastRecipient {
   @@unique([broadcastId, phone])
   @@map("broadcast_recipient")
 }
+
+/// Pedido recebido do iFood e o que virou no sistema.
+model IfoodOrder {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  storeId      String   @map("store_id")
+  ifoodId      String   @unique @map("ifood_id")
+  displayId    String   @default("") @map("display_id")
+  /// importado | sem_cadastro | cancelado | concluido
+  status       String   @default("importado")
+  customerName String   @default("") @map("customer_name")
+  total        Decimal  @default(0) @db.Decimal(12, 2)
+  /// Total da venda no sistema (pelos preços daqui).
+  localTotal   Decimal? @map("local_total") @db.Decimal(12, 2)
+  payload      Json
+  orderId      String?  @map("order_id")
+  problem      String?
+  /// Último andamento avisado ao iFood.
+  syncedStatus String?  @map("synced_status")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@map("ifood_order")
+}

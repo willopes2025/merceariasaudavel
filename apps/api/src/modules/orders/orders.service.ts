@@ -300,7 +300,8 @@ export class OrdersService {
   @Cron('0 */15 * * * *', { timeZone: 'America/Sao_Paulo' })
   async expireUnpaid(): Promise<number> {
     const r = await this.prisma.order.updateMany({
-      where: { status: 'aguardando_pagamento', createdAt: { lt: this.unpaidLimit() } },
+      // Pedido do iFood já chega pago: nunca vence por falta de pagamento.
+      where: { status: 'aguardando_pagamento', channel: { not: 'ifood' }, createdAt: { lt: this.unpaidLimit() } },
       data: { status: 'cancelado', canceledAt: new Date(), cancelReason: `Não foi pago em ${UNPAID_HOURS} h` },
     });
     if (r.count) this.logger.log(`${r.count} pedido(s) sem pagamento cancelado(s)`);

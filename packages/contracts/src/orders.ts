@@ -23,7 +23,7 @@ export const ORDER_STATUS = {
 } as const;
 export type OrderStatus = keyof typeof ORDER_STATUS;
 
-export const ORDER_CHANNELS = { app: 'App', totem: 'Totem', balcao: 'Balcão' } as const;
+export const ORDER_CHANNELS = { app: 'App', totem: 'Totem', balcao: 'Balcão', ifood: 'iFood' } as const;
 export type OrderChannel = keyof typeof ORDER_CHANNELS;
 
 /** Andar com o pedido na tela de preparo. */
