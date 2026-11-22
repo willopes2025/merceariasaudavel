@@ -183,3 +183,15 @@ export interface BroadcastPreview {
 export interface AdsReport {
   rows: Array<{ source: string; campaign: string; signups: number; orders: number; revenue: number }>;
 }
+
+// ───────────── Central de avisos ─────────────
+
+export interface Alert {
+  key: string;
+  /** urgente = precisa de ação hoje; atencao = olhar esta semana. */
+  level: 'urgente' | 'atencao';
+  title: string;
+  detail: string;
+  /** Tela onde se resolve. */
+  path: string;
+}

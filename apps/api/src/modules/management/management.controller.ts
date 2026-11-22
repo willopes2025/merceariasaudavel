@@ -4,6 +4,7 @@ import { Ctx, Public, RequiresPermission } from '../../common/auth/decorators';
 import { DomainError } from '../../common/errors/domain-error';
 import type { RequestContext } from '../../common/tenancy/request-context';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
+import { AlertsService } from './alerts.service';
 import { ManagementService } from './management.service';
 
 const uuid = new ParseUUIDPipe();
@@ -15,7 +16,16 @@ const optionalUuid = (v?: string) => {
 
 @Controller()
 export class ManagementController {
-  constructor(private readonly management: ManagementService) {}
+  constructor(
+    private readonly management: ManagementService,
+    private readonly alertsService: AlertsService,
+  ) {}
+
+  /** Avisos do que pede atenção: cada pessoa vê só o que tem permissão. */
+  @Get('alerts')
+  alerts(@Ctx() ctx: RequestContext) {
+    return this.alertsService.list(ctx);
+  }
 
   @Get('dashboard')
   @RequiresPermission(PERMISSIONS.reportView)

@@ -112,6 +112,7 @@ export const NAV: NavGroup[] = [
       { label: 'Nota fiscal', path: '/configuracoes/fiscal', phase: 0, permission: 'settings.manage' },
       { label: 'Importar planilha', path: '/configuracoes/importar', phase: 0, permission: 'settings.manage' },
       { label: 'Auditoria', path: '/configuracoes/auditoria', phase: 0, permission: 'user.manage' },
+      { label: 'Ajuda', path: '/ajuda', phase: 0 },
     ],
   },
 ];

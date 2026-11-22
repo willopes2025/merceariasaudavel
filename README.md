@@ -279,7 +279,15 @@ Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `financ
   Mostra as vendas de quem recebeu nos 7 dias seguintes. A aba de anúncios soma cadastros e pedidos por UTM.
 - Teste: `scripts/e2e-controle.mjs`.
 
+## Avisos, ajuda e arquivo do ponto
+- **Central de avisos** (sino no topo): contas vencidas e do dia, recebimentos atrasados, linhas do banco sem
+  conciliar, estoque mínimo, lotes vencidos ou vencendo, conversas do WhatsApp esperando, notas rejeitadas, pedidos
+  parados e ponto do mês passado sem fechar. Cada pessoa vê só o que tem permissão.
+- **Ajuda** (`/ajuda`): manual por área, com busca e atalho para cada tela.
+- **AFD do ponto** (Ponto › Arquivo AFD): arquivo das marcações no leiaute 004 da Portaria 671 para REP-P (cabeçalho
+  com CRC-16/KERMIT, marcações tipo 7 com SHA-256 encadeado, trailer e linha de assinatura). Sai sem assinatura
+  digital (.p7s) e sem registro no INPI: `AFD_INPI` e `AFD_DEV_DOC` no `.env` preenchem esses campos quando houver.
+
 ### O que ainda falta
-Arquivos legais do ponto (AFD/AEJ da Portaria 671 com assinatura digital) e envio à contabilidade; central de avisos
-e manual dentro do sistema; e as duas telas que dependem de contrato e credencial de terceiros: Marketplaces e
-iFood, e Câmeras com IA.
+Assinatura digital do AFD (precisa de certificado ICP-Brasil) e o AEJ; e as duas telas que dependem de contrato e
+credencial de terceiros: Marketplaces e iFood, e Câmeras com IA.

@@ -160,7 +160,7 @@ function Espelho({ m, aoAjustar, aoDesfazer }: { m: Mirror; aoAjustar?: (d: Mirr
 
 // ───────────── Gestão do ponto ─────────────
 
-type Aba = 'hoje' | 'espelho' | 'mes';
+type Aba = 'hoje' | 'espelho' | 'mes' | 'afd';
 
 export function ClockScreen() {
   const [aba, setAba] = useState<Aba>('hoje');
@@ -169,11 +169,48 @@ export function ClockScreen() {
     <div className="max-w-6xl space-y-4">
       <PageHeader title="Ponto" subtitle="Quem está trabalhando agora, o espelho de cada pessoa (com ajustes e ocorrências) e o fechamento do mês com a folha." />
       <div className="flex gap-1 border-b border-slate-200" role="tablist">
-        {([['hoje', 'Hoje'], ['espelho', 'Espelho'], ['mes', 'Mês e folha']] as const).map(([k, t]) => (
+        {([['hoje', 'Hoje'], ['espelho', 'Espelho'], ['mes', 'Mês e folha'], ['afd', 'Arquivo AFD']] as const).map(([k, t]) => (
           <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)} className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${aba === k ? 'border-brand text-brand' : 'border-transparent text-ink-soft hover:text-ink'}`}>{t}</button>
         ))}
       </div>
-      {aba === 'hoje' ? <Hoje abrir={(id) => { setFunc(id); setAba('espelho'); }} /> : aba === 'espelho' ? <EspelhoGestao func={func} setFunc={setFunc} /> : <Mes abrir={(id) => { setFunc(id); setAba('espelho'); }} />}
+      {aba === 'hoje' ? <Hoje abrir={(id) => { setFunc(id); setAba('espelho'); }} /> : aba === 'espelho' ? <EspelhoGestao func={func} setFunc={setFunc} /> : aba === 'afd' ? <Afd /> : <Mes abrir={(id) => { setFunc(id); setAba('espelho'); }} />}
+    </div>
+  );
+}
+
+/** Arquivo Fonte de Dados (AFD): o arquivo das marcações que a fiscalização e a contabilidade pedem. */
+function Afd() {
+  const hoje = todayBR();
+  const [de, setDe] = useState(`${hoje.slice(0, 7)}-01`);
+  const [ate, setAte] = useState(hoje);
+  const [msg, setMsg] = useState('');
+  const baixar = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${import.meta.env.VITE_API_URL ?? '/v1'}/hr/clock/afd?from=${de}&to=${ate}`, { headers: { authorization: `Bearer ${session.token()}` } });
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.message ?? 'Não deu para gerar o arquivo.');
+      const nome = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') ?? '')?.[1] ?? 'AFD.txt';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = nome;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      const semCpf = Number(r.headers.get('x-afd-sem-cpf') ?? 0);
+      setMsg(`${r.headers.get('x-afd-count') ?? 0} marcações no arquivo.${semCpf ? ` Atenção: ${semCpf} marcações são de funcionário sem CPF no cadastro; preencha o CPF e gere de novo.` : ''}`);
+    },
+  });
+  return (
+    <div className="card space-y-4 p-4">
+      <p className="text-sm text-ink-soft">Gera o AFD das marcações do período no leiaute da Portaria 671 (registro de ponto por programa, REP-P). As marcações originais entram como foram batidas; ajustes ficam só no espelho.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="De"><input type="date" className="input w-40" value={de} onChange={(e) => e.target.value && setDe(e.target.value)} /></Field>
+        <Field label="Até"><input type="date" className="input w-40" value={ate} onChange={(e) => e.target.value && setAte(e.target.value)} /></Field>
+        <button className="btn-primary" disabled={baixar.isPending || de > ate} onClick={() => baixar.mutate()}>{baixar.isPending ? 'Gerando…' : 'Baixar AFD'}</button>
+      </div>
+      <ErrorBox error={baixar.error} />
+      {msg && <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{msg}</div>}
+      <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+        O arquivo sai <b>sem assinatura digital</b> e sem o número de registro do programa no INPI. Para valer numa fiscalização, a portaria pede que ele seja assinado com certificado digital (arquivo .p7s) e que o programa tenha registro no INPI. Para a contabilidade conferir as marcações ele já serve.
+      </div>
     </div>
   );
 }

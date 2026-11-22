@@ -198,6 +198,22 @@ export class HrController {
     return this.hr.close(ctx, d.month, d.employeeIds);
   }
 
+  @Get('clock/afd')
+  @RequiresPermission(PERMISSIONS.hrManage)
+  async afd(@Ctx() ctx: RequestContext, @Query('from') from: string, @Query('to') to: string, @Res() res: Response) {
+    const data = /^\d{4}-\d{2}-\d{2}$/;
+    if (!data.test(from ?? '') || !data.test(to ?? '') || from > to) {
+      res.status(422).json({ code: 'BAD_PERIOD', message: 'Informe o período do AFD.' });
+      return;
+    }
+    const a = await this.hr.afd(ctx, from, to);
+    res.setHeader('content-type', 'text/plain; charset=iso-8859-1');
+    res.setHeader('content-disposition', `attachment; filename="${a.filename}"`);
+    res.setHeader('x-afd-count', String(a.count));
+    res.setHeader('x-afd-sem-cpf', String(a.semCpf));
+    res.send(Buffer.from(a.text, 'latin1'));
+  }
+
   @Get('clock/records/:id/photo')
   @RequiresPermission(PERMISSIONS.hrManage)
   async photo(@Ctx() ctx: RequestContext, @Param('id', uuid) id: string, @Res() res: Response) {

@@ -6,6 +6,7 @@ import type { SessionUser } from '@mercearia/contracts';
 import { api, can, session } from '../lib/api';
 import { activePath, visibleNav } from '../lib/nav';
 import { Loading } from './ui';
+import { AlertsBell } from './AlertsBell';
 
 const GRUPOS = 'mercearia.menu.fechados';
 const ESCONDIDO = 'mercearia.menu.escondido';
@@ -158,6 +159,8 @@ export function AppShell({ onSignOut }: { onSignOut: () => void }) {
             <span className="font-display text-sm font-medium text-ink-soft">{me.data?.tenantName}</span>
           </div>
           <div className="flex items-center gap-4 text-sm">
+            <AlertsBell />
+            <Link to="/ajuda" className="text-ink-soft hover:text-ink" title="Manual do sistema">Ajuda</Link>
             <span className="hidden text-ink sm:inline">{me.data?.name}</span>
             <button className="text-ink-soft hover:text-ink" onClick={onSignOut}>
               Sair

@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import {
   OCCURRENCE_TYPES,
+  addDays,
   hrConfigSchema,
   normalizeText,
   todayBR,
@@ -287,6 +288,25 @@ export class HrService {
     });
     const hoje = await this.prisma.clockRecord.findMany({ where: { employeeId: emp.id, at: { gte: new Date(`${todayBR()}T00:00:00-03:00`) } }, orderBy: { at: 'asc' }, select: { at: true } });
     return { id: r.id, employee: emp.name, at: r.at.toISOString(), nsr: r.nsr, hash: r.hash, outside, place: placeName, today: hoje.map((x) => brHora(x.at)) };
+  }
+
+  /** Arquivo Fonte de Dados (AFD) das marcações do período, no leiaute da Portaria 671 para REP-P. */
+  async afd(ctx: RequestContext, from: string, to: string) {
+    const [tenant, loja, registros] = await Promise.all([
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { name: true } }),
+      this.prisma.store.findFirst({ where: { tenantId: ctx.tenantId, cnpj: { not: null } }, orderBy: { createdAt: 'asc' }, select: { cnpj: true } }),
+      this.prisma.$queryRaw<Array<{ nsr: number; at: Date; cpf: string | null; source: string }>>`
+        SELECT r.nsr, r.at, e.cpf, r.source FROM clock_record r JOIN employee e ON e.id = r.employee_id
+         WHERE r.tenant_id = ${ctx.tenantId} AND r.at < ${new Date(`${addDays(to, 1)}T03:00:00Z`)} ORDER BY r.nsr`,
+    ]);
+    if (!loja?.cnpj) throw new DomainError('AFD_NO_CNPJ', 'Cadastre o CNPJ da loja (Configurações › Loja) antes de gerar o AFD.');
+    const semCpf = registros.filter((r) => !r.cpf).length;
+    const { buildAfd } = await import('./afd');
+    const inpi = process.env.AFD_INPI ?? '';
+    const dev = process.env.AFD_DEV_DOC ?? '';
+    const { text, count } = buildAfd({ employerDoc: loja.cnpj, employerName: tenant.name, inpi, developerDoc: dev, from, to, generatedAt: new Date(), records: registros.map((r) => ({ nsr: r.nsr, at: r.at, cpf: r.cpf ?? '', source: r.source })) });
+    await this.audit.record(ctx, 'clock.afd', 'clock_record', null, { de: from, ate: to, marcacoes: count });
+    return { text, count, semCpf, filename: `AFD${inpi.replace(/\D/g, '').padStart(17, '0')}${loja.cnpj}REP_P.txt` };
   }
 
   /** "Meu ponto": meu cadastro, as batidas de hoje e o espelho do mês. */

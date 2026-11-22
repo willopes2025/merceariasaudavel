@@ -202,5 +202,34 @@ await check('auditoria lista o que foi feito, filtra por onde e não abre para q
   ok(await call(`/audit?from=${hoje}&to=${hoje}`), 401);
 });
 
+// ───────────── Avisos e AFD ─────────────
+await check('central de avisos junta o que pede atenção e some quando resolve', async () => {
+  const [v] = ok(await call('/payables', { ...T, method: 'POST', body: { description: `Vencida ${tag}`, chartAccountId: despesa.id, amount: '77,00', dueDate: addDays(hoje, -3) } }), 201);
+  let avisos = ok(await call('/alerts', T));
+  const a = avisos.find((x) => x.key === 'pagar-atrasadas');
+  assert.ok(a && a.level === 'urgente' && a.path === '/pagar', JSON.stringify(avisos));
+  assert.ok(avisos.findIndex((x) => x.level === 'atencao') === -1 || avisos.findIndex((x) => x.level === 'urgente') < avisos.findIndex((x) => x.level === 'atencao'));
+  const antes = Number(a.title.split(' ')[0]);
+  ok(await call(`/payables/${v.id}/cancel`, { ...T, method: 'POST' }));
+  avisos = ok(await call('/alerts', T));
+  assert.equal(Number(avisos.find((x) => x.key === 'pagar-atrasadas')?.title.split(' ')[0] ?? 0), antes - 1);
+  ok(await call('/alerts'), 401);
+});
+await check('AFD do ponto: leiaute da Portaria 671 (cabeçalho 302, marcação 137, trailer 64, assinatura 100)', async () => {
+  await db.query(`UPDATE store SET cnpj = COALESCE(cnpj, '12345678000195') WHERE tenant_id = (SELECT id FROM tenant WHERE slug = $1)`, [SLUG]);
+  const { rows } = await db.query(`SELECT COUNT(*)::int AS n FROM clock_record r JOIN tenant t ON t.id = r.tenant_id WHERE t.slug = $1 AND (r.at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN $2 AND $3`, [SLUG, addDays(hoje, -400), hoje]);
+  const res = await fetch(`${BASE}/hr/clock/afd?from=${addDays(hoje, -400)}&to=${hoje}`, { headers: { authorization: `Bearer ${token}` } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-disposition'), /AFD\d{17}\d{14}REP_P\.txt/);
+  const linhas = Buffer.from(await res.arrayBuffer()).toString('latin1').split('\r\n');
+  assert.equal(linhas.pop(), '');
+  assert.equal(linhas.length, rows[0].n + 3);
+  assert.equal(linhas[0].length, 302);
+  assert.ok(linhas.slice(1, -2).every((l) => l.length === 137 && l[9] === '7' && /^[0-9a-f]{64}$/.test(l.slice(73))));
+  assert.deepEqual([linhas.at(-2).length, Number(linhas.at(-2).slice(54, 63)), linhas.at(-1).length], [64, rows[0].n, 100]);
+  assert.ok(linhas.at(-1).startsWith('ASSINATURA_DIGITAL_EM_ARQUIVO_P7S'));
+  assert.equal((await fetch(`${BASE}/hr/clock/afd?from=x&to=y`, { headers: { authorization: `Bearer ${token}` } })).status, 422);
+});
+
 await db.end();
 console.log(`\n${passed} verificações passaram.`);
