@@ -74,6 +74,8 @@ model TenantSetting {
   shopDescription    String?  @map("shop_description")
   metaPixelId        String?  @map("meta_pixel_id")
   ga4Id              String?  @map("ga4_id")
+  /// Assistente: nome, orientações, voz e quem pode aprovar automaticamente.
+  assistantConfig    Json?    @map("assistant_config")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -1184,4 +1186,192 @@ model OnlinePayment {
   @@index([tenantId, orderId])
   @@index([status, paidAt])
   @@map("online_payment")
+}
+
+/**
+ * Conversa de alguém da equipe com o Assistente (texto ou voz).
+ */
+model AssistantSession {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  title     String   @default("Nova conversa")
+  /**
+   * O assistente está trabalhando agora (a tela acompanha).
+   */
+  busy      Boolean  @default(false)
+  /**
+   * perguntar | automatico
+   */
+  approval  String   @default("perguntar")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  messages AssistantMessage[]
+  actions  AssistantAction[]
+
+  @@index([tenantId, userId, updatedAt])
+  @@map("assistant_session")
+}
+
+/**
+ * Mensagens no formato da API do Claude (texto, uso de ferramenta e resultado).
+ */
+model AssistantMessage {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  sessionId String   @map("session_id")
+  /**
+   * user | assistant
+   */
+  role      String
+  content   Json
+  /**
+   * O que aparece na tela.
+   */
+  text      String?
+  /**
+   * Resposta com as marcações de emoção, para a voz.
+   */
+  speech    String?
+  /**
+   * texto | voz | sistema | rotina
+   */
+  origin    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session AssistantSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("assistant_message")
+}
+
+/**
+ * Cada ferramenta usada: consulta, ação direta ou ação que espera a confirmação.
+ */
+model AssistantAction {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  sessionId  String    @map("session_id")
+  userId     String?   @map("user_id")
+  tool       String
+  input      Json
+  /**
+   * leitura | acao | confirmar
+   */
+  risk       String
+  /**
+   * concluida | aguardando | executando | cancelada | erro
+   */
+  status     String
+  summary    String?
+  preview    Json?
+  result     Json?
+  error      String?
+  progress   Json?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  finishedAt DateTime? @map("finished_at")
+
+  session AssistantSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("assistant_action")
+}
+
+/**
+ * Necessidade que o assistente não resolve: vira pedido com especificação e plano.
+ */
+model AssistantRequest {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  number    Int
+  sessionId String?  @map("session_id")
+  userId    String?  @map("user_id")
+  /**
+   * configurar | desenvolver
+   */
+  kind      String
+  title     String
+  spec      String
+  plan      Json     @default("[]")
+  module    String?
+  priority  String   @default("normal")
+  /**
+   * novo | em_analise | em_andamento | pronto | recusado
+   */
+  status    String   @default("novo")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([tenantId, number])
+  @@map("assistant_request")
+}
+
+/**
+ * Rotina (agente agendado): instrução que o assistente executa sozinho no horário ou a cada X minutos.
+ */
+model AssistantRoutine {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  userId        String    @map("user_id")
+  title         String
+  instruction   String
+  /**
+   * horario | intervalo
+   */
+  kind          String    @default("horario")
+  time          String    @default("08:00")
+  intervalMin   Int?      @map("interval_min")
+  windowStart   String?   @map("window_start")
+  windowEnd     String?   @map("window_end")
+  days          Json      @default("[0,1,2,3,4,5,6]")
+  emails        Json      @default("[]")
+  active        Boolean   @default(true)
+  approval      String    @default("perguntar")
+  nextAt        DateTime  @map("next_at")
+  lastAt        DateTime? @map("last_at")
+  lastSessionId String?   @map("last_session_id")
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([active, nextAt])
+  @@map("assistant_routine")
+}
+
+/**
+ * Arquivo anexado numa conversa (foto, PDF, planilha, documento, vídeo ou áudio). Guardado no banco.
+ */
+model AssistantAttachment {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  name      String
+  mime      String
+  size      Int
+  data      Bytes
+  /**
+   * Texto tirado do arquivo ou a transcrição do áudio.
+   */
+  extract   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, userId])
+  @@map("assistant_attachment")
+}
+
+/**
+ * Uso da inteligência artificial (tokens por recurso), para acompanhar o custo.
+ */
+model AiUsage {
+  id        String   @id @default(uuid())
+  tenantId  String?  @map("tenant_id")
+  userId    String?  @map("user_id")
+  feature   String
+  model     String
+  tokensIn  Int      @default(0) @map("tokens_in")
+  tokensOut Int      @default(0) @map("tokens_out")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@map("ai_usage")
 }

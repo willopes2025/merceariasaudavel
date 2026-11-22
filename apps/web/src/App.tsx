@@ -52,6 +52,7 @@ const SuppliersScreen = screen(() => import('./screens/purchasing/PurchasingScre
 const PurchaseOrdersScreen = screen(() => import('./screens/purchasing/PurchasingScreens'), (m) => m.PurchaseOrdersScreen);
 const DeliveriesScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliveriesScreen);
 const DeliverySettingsScreen = screen(() => import('./screens/delivery/DeliveryScreens'), (m) => m.DeliverySettingsScreen);
+const AssistantScreen = screen(() => import('./screens/assistant/AssistantScreen'), (m) => m.AssistantScreen);
 const PartnersScreen = screen(() => import('./screens/partners/PartnersScreens'), (m) => m.PartnersScreen);
 const KitsScreen = screen(() => import('./screens/partners/PartnersScreens'), (m) => m.KitsScreen);
 const Storefront = screen(() => import('./shop/Storefront'), (m) => m.Storefront);
@@ -167,6 +168,7 @@ export function App() {
             <Route path="preparo" element={<KitchenBoard />} />
             <Route path="recompra" element={<GrowthScreen />} />
             <Route path="campanhas" element={<CampaignsScreen />} />
+            <Route path="assistente" element={<AssistantScreen />} />
             <Route path="parceiros" element={<PartnersScreen />} />
             <Route path="kits" element={<KitsScreen />} />
             <Route path="inteligencia-estoque" element={<StockIntelScreen />} />

@@ -17,6 +17,7 @@
     "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
+    "@mercearia/contracts": "*",
     "@nestjs/common": "^11.0.10",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.10",
@@ -26,10 +27,11 @@
     "@nestjs/swagger": "^11.0.3",
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.3.1",
-    "@mercearia/contracts": "*",
     "argon2": "^0.41.1",
     "dotenv": "^18.0.10",
     "fast-xml-parser": "^5.12.1",
+    "fflate": "^0.8.3",
+    "nodemailer": "^10.6.1",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -40,6 +42,7 @@
     "@nestjs/testing": "^11.0.10",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "prisma": "^6.3.1",
     "typescript": "^5.8.3",

@@ -19,7 +19,7 @@ async function bootstrap(): Promise<void> {
 
   // Atrás do Caddy: IP e protocolo do cliente vêm dos cabeçalhos X-Forwarded-*.
   app.set('trust proxy', 'loopback, uniquelocal');
-  app.useBodyParser('json', { limit: '15mb' });
+  app.useBodyParser('json', { limit: '26mb' });
   app.useBodyParser('urlencoded', { limit: '15mb', extended: true });
 
   app.setGlobalPrefix('v1');

@@ -47,6 +47,22 @@ services:
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
       MP_PAYER_EMAIL: ${MP_PAYER_EMAIL:-}
       PAY_PROVIDER: ${PAY_PROVIDER:-}
+      # Assistente (Claude). Sem ANTHROPIC_API_KEY, o assistente fica desligado.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      IA_MODELO: ${IA_MODELO:-}
+      IA_MODELO_ASSISTENTE: ${IA_MODELO_ASSISTENTE:-}
+      IA_MODELO_TRIAGEM: ${IA_MODELO_TRIAGEM:-}
+      # Voz: OpenAI (transcrever o microfone e falar) e ElevenLabs (voz mais natural). Opcionais.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      # E-mail das rotinas do assistente (SMTP). Vazio = envio só simulado.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      EMAIL_SUPORTE: ${EMAIL_SUPORTE:-}
+      ASSISTENTE_INTERVALO_LOTE_S: ${ASSISTENTE_INTERVALO_LOTE_S:-20}
       PORT: 3000
     expose:
       - "3000"

@@ -29,6 +29,8 @@ import { PartnersModule } from './modules/partners/partners.module';
 import { PurchasingModule } from './modules/purchasing/purchasing.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { TenancyModule } from './modules/tenancy/tenancy.module';
+import { AiModule } from './modules/ai/ai.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 
 /**
  * Mercearia Saudável — Fase 1 (loja física): acesso, clientes e clube,
@@ -41,6 +43,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    AiModule,
     PaymentsCoreModule,
     AuditModule,
     IamModule,
@@ -63,6 +66,7 @@ import { TenancyModule } from './modules/tenancy/tenancy.module';
     PartnersModule,
     PaymentsModule,
     StorefrontModule,
+    AssistantModule,
   ],
   controllers: [HealthController],
   providers: [

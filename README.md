@@ -186,3 +186,25 @@ Ver [DEPLOY.md](DEPLOY.md). Decisões já tomadas: [DECISOES.md](DECISOES.md).
 - **Pixel do Meta e Google Analytics 4:** basta colar os IDs. Eventos enviados: visita,
   produto visto, carrinho, cadastro, início da compra e compra paga. Só carregam depois que
   a cliente aceita os cookies (LGPD).
+
+## Assistente (texto e voz)
+
+Portado do assistente da Plataforma Aritana e adaptado à Mercearia. Fica em **Gestão › Assistente**
+(permissão "Usar o Assistente": dono e gerente; atendente e caixa não veem).
+
+- **Conversa por texto, voz ou anexo** (foto, PDF, planilha, Word, áudio, vídeo). Ele consulta o
+  sistema com as permissões de quem pergunta e analisa os resultados como um gestor parceiro.
+- **Consultas:** painel do dia, resumo do período comparado ao anterior, consulta livre em 15
+  conjuntos de dados (vendas, itens, pagamentos, estoque, perdas, validade, clientes, pedidos do app,
+  campanhas, parceiros, contas, caixas, compras, cashback), inteligência de estoque, ficha da cliente,
+  recompra/sumidas/aniversariantes, contas a pagar, pedidos em andamento, parceiros e campanhas.
+- **Ações com confirmação** (cartão com prévia; botão ou "pode"/"cancela"): criar e pausar campanha,
+  mudar preço e preço de membro, pedido de compra em rascunho, lançar conta a pagar, e-mail com
+  planilha e — quando o WhatsApp estiver ligado no servidor — mensagem e envio em lote espaçado.
+  A gestão pode liberar o modo "Aprovar automaticamente".
+- **Agentes agendados (rotinas):** "todo dia às 20h me manda o resumo do dia por e-mail". Rodam
+  sozinhos com as permissões atuais de quem criou; cada execução vira uma conversa.
+- **Pedidos:** o que ainda não existe vira pedido com especificação e plano para a equipe da Wide.
+- **Chaves no `.env` do servidor:** `ANTHROPIC_API_KEY` (obrigatória para ligar), `OPENAI_API_KEY`
+  (microfone e voz), `ELEVENLABS_API_KEY` (voz mais natural), `SMTP_*` (e-mail das rotinas).
+- Teste dos conjuntos no banco: `ASSISTANT_DB_TEST=1 npx vitest run src/modules/assistant` (em apps/api).

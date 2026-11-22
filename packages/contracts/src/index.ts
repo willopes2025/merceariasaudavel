@@ -36,6 +36,8 @@ export const PERMISSIONS = {
   campaignManage: 'campaign.manage',
   purchaseManage: 'purchase.manage',
   partnerManage: 'partner.manage',
+  /** Conversar com o Assistente (texto e voz). */
+  assistantUse: 'assistant.use',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -67,6 +69,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'campaign.manage': 'Criar campanhas, cupons e ofertas',
   'purchase.manage': 'Fornecedores e pedidos de compra',
   'partner.manage': 'Parceiros, comissões e kits',
+  'assistant.use': 'Usar o Assistente (texto e voz)',
 };
 
 /**

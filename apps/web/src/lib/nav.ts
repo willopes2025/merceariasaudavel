@@ -26,6 +26,7 @@ export const NAV: NavGroup[] = [
     label: 'Gestão',
     items: [
       { label: 'Painel do dia', path: '/', phase: 0 },
+      { label: 'Assistente', path: '/assistente', phase: 0, permission: 'assistant.use' },
       { label: 'Metas', path: '/metas', phase: 0, permission: 'report.view' },
       { label: 'Resumo do período', path: '/resumo', phase: 0, permission: 'report.view' },
       { label: 'Câmeras com IA', path: '/cameras', phase: 3, permission: 'report.view', description: 'As câmeras Intelbras contam quem entra na loja e o sistema mostra a conversão real do balcão, os horários de pico e as filas. Contagem anônima, sem reconhecimento facial.' },

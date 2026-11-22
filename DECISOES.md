@@ -141,3 +141,16 @@ Leia antes de mexer. Cada linha é uma decisão já tomada; mudar exige combinar
 - Toda tabela nova: `tenant_id` + política de RLS na migração.
 - Dentro de `$transaction(async (tx) => ...)` usar só `tx`.
 - Toda entrega: `npm run e2e` passando antes de subir.
+
+## Assistente
+- Reaproveitado da Aritana (mesmo laço de ferramentas, cartões de confirmação, rotinas e voz); o que
+  muda é o catálogo de ferramentas e os conjuntos de dados, escritos para a Mercearia.
+- A IA nunca escreve SQL: escolhe conjunto, métricas, dimensões e filtros de listas fixas; valores e a
+  organização vão como parâmetros; a consulta roda em transação só leitura com tempo máximo de 8 s.
+- Toda ferramenta chama os mesmos serviços das telas e respeita a permissão de quem pergunta.
+  Mandar mensagem e mexer em preço, campanha, compra ou financeiro sempre passa por confirmação,
+  exceto no modo automático (liberado pela gestão) e e-mail para endereços autorizados na rotina.
+- Rotinas e envios em lote rodam dentro do contexto de quem pediu (RLS por empresa vale também fora
+  da requisição). Usuário desativado pausa as rotinas dele.
+- Anexos ficam no banco (bytea), não em disco: o backup do Postgres já cobre.
+- Chaves de IA, voz e SMTP só no `.env` do servidor; nada disso é editável pela tela.
