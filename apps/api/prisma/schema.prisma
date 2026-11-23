@@ -1821,3 +1821,18 @@ model FootTraffic {
   @@index([tenantId, day])
   @@map("foot_traffic")
 }
+
+/// Pendência de implantação (a lista fica no código; aqui, só a situação de cada item).
+model SetupItem {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  key         String
+  /// pendente | recebido | concluido | nao_se_aplica
+  status      String   @default("pendente")
+  note        String?
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([tenantId, key])
+  @@map("setup_item")
+}

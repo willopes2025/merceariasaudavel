@@ -308,5 +308,12 @@ Em **Financeiro e fiscal** (ver: `finance.view`; dar baixa e configurar: `financ
 - Não há integração própria com um modelo de câmera: vale para qualquer equipamento que consiga chamar um endereço.
   **Ainda não foi testado com uma câmera de verdade.**
 
+## Implantação
+- `/configuracoes/implantacao`: as 48 pendências de implantação em 8 grupos (empresa e nota fiscal, produtos,
+  clientes, financeiro, equipe, entrega, contas de terceiros, equipamentos). Cada item tem situação (pendente,
+  recebido, concluído, não se aplica), observação, quem mexeu e quando, e atalho para a tela onde se configura.
+- O sistema mostra ao lado o que já enxerga cadastrado (ex.: "128 produtos cadastrados", "Chave cadastrada no
+  servidor"), mas não conclui o item sozinho: quem marca é a pessoa. A lista fica em `packages/contracts/src/setup.ts`.
+
 ### O que ainda falta
 Assinatura digital do AFD (precisa de certificado ICP-Brasil) e o AEJ; Mercado Livre, Shopee, Amazon e 99Food.

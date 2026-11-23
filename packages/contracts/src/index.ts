@@ -238,6 +238,7 @@ export * from './hr';
 export * from './goals';
 export * from './finance';
 export * from './extras';
+export * from './setup';
 export * from './fiscal';
 export * from './stock-entry';
 

@@ -103,6 +103,7 @@ export const NAV: NavGroup[] = [
     key: 'configuracoes',
     label: 'Configurações',
     items: [
+      { label: 'Implantação', path: '/configuracoes/implantacao', phase: 0, permission: 'settings.manage' },
       { label: 'Loja', path: '/configuracoes/lojas', phase: 0, permission: 'settings.manage' },
       { label: 'Usuários', path: '/configuracoes/usuarios', phase: 0, permission: 'user.manage' },
       { label: 'Clube e cashback', path: '/configuracoes/clube', phase: 0, permission: 'settings.manage' },

@@ -254,5 +254,25 @@ await check('fluxo de pessoas: contagem digitada e da câmera, conversão só do
   ok(await call(`/traffic/report?from=${hoje}&to=${hoje}`), 401);
 });
 
+// ───────────── Implantação ─────────────
+await check('implantação: lista as pendências, mostra o que o sistema já enxerga e guarda a situação de cada item', async () => {
+  await db.query(`DELETE FROM setup_item WHERE key IN ('fiscal.contador', 'equip.totem')`);
+  const antes = ok(await call('/setup', T));
+  const todos = antes.groups.flatMap((g) => g.items);
+  assert.equal(antes.total, todos.length);
+  assert.ok(antes.total >= 45 && antes.groups.length === 8);
+  assert.match(todos.find((i) => i.key === 'produtos.planilha').detected, /produtos? cadastrados?/);
+  assert.equal(todos.find((i) => i.key === 'fiscal.contador').detected, null);
+  ok(await call('/setup/fiscal.contador', { ...T, method: 'PUT', body: { status: 'recebido', note: 'Contador envia até sexta' } }));
+  ok(await call('/setup/equip.totem', { ...T, method: 'PUT', body: { status: 'nao_se_aplica' } }));
+  const depois = ok(await call('/setup', T));
+  const c = depois.groups.flatMap((g) => g.items).find((i) => i.key === 'fiscal.contador');
+  assert.deepEqual([c.status, c.note, !!c.updatedBy], ['recebido', 'Contador envia até sexta', true]);
+  assert.deepEqual([depois.done - antes.done, depois.received - antes.received], [1, 1]);
+  ok(await call('/setup/nao.existe', { ...T, method: 'PUT', body: { status: 'concluido' } }), 404);
+  ok(await call('/setup/fiscal.contador', { ...T, method: 'PUT', body: { status: 'talvez' } }), 400);
+  ok(await call('/setup'), 401);
+});
+
 await db.end();
 console.log(`\n${passed} verificações passaram.`);
